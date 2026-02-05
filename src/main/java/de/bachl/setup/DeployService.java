@@ -1,0 +1,151 @@
+package de.bachl.setup;
+
+import com.jcraft.jsch.Session;
+
+import de.bachl.Config.Config;
+import de.bachl.Config.ConfigProvider;
+import de.bachl.Config.ProjectConfig;
+import de.bachl.utils.Log;
+
+public class DeployService {
+
+    private final String dir = System.getProperty("user.dir");
+
+    public void deploy() {
+        ConfigProvider configProvider = new ConfigProvider();
+        ProjectConfig projectConfig = configProvider.getProjectConfig();
+        Config config = configProvider.getServerConfig(projectConfig.getServername());
+
+        Log.info("Start sftp connection for File upload");
+        connect(config, dir + "/dist", "/var/www/html/" + config.getName());
+
+        Log.info("Start SSH connection for command execution");
+        try {
+            Session session = connectSSH(config);
+
+            if (projectConfig.isEnabledomain()) {
+                Log.info("Configuring Nginx for domain: " + projectConfig.getDomain());
+                new de.bachl.services.NginxService().setupSite(session, projectConfig.getProjectname(),
+                        projectConfig.getDomain(), 80);
+            }
+
+            Log.info("Start command execution");
+            sendCommand("", session);
+        } catch (Exception e) {
+            Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
+            System.exit(1);
+        }
+
+    }
+
+    public com.jcraft.jsch.Session connectSSH(Config config) throws com.jcraft.jsch.JSchException {
+        com.jcraft.jsch.JSch jsch = new com.jcraft.jsch.JSch();
+        jsch.addIdentity(config.getKeypath());
+        com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), 22);
+        session.setConfig("StrictHostKeyChecking", "no");
+        session.connect();
+        return session;
+    }
+
+    void sendCommand(String command, Session session) throws Exception {
+        com.jcraft.jsch.ChannelExec channel = (com.jcraft.jsch.ChannelExec) session.openChannel("exec");
+        channel.setCommand(command);
+        channel.connect();
+        java.io.InputStream in = channel.getInputStream();
+        byte[] tmp = new byte[1024];
+        while (true) {
+            while (in.available() > 0) {
+                if (in.read(tmp, 0, 1024) < 0)
+                    break;
+            }
+            if (channel.isClosed()) {
+                if (in.available() > 0)
+                    continue;
+                int exitStatus = channel.getExitStatus();
+                if (exitStatus != 0) {
+                    throw new Exception(
+                            "Command execution failed with exit code: " + exitStatus + " for command: " + command);
+                }
+                break;
+            }
+            Thread.sleep(1000);
+        }
+        channel.disconnect();
+    }
+
+    void connect(Config config, String localPath, String remotePath) {
+        Log.info("Connecting to " + config.getHost() + " to upload all project files from " + localPath + " to "
+                + remotePath);
+        try {
+            com.jcraft.jsch.JSch jsch = new com.jcraft.jsch.JSch();
+
+            if (config.getKeypath() != null && !config.getKeypath().isEmpty()) {
+                jsch.addIdentity(config.getKeypath());
+            }
+
+            com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), 22);
+            session.setConfig("StrictHostKeyChecking", "no");
+
+            if (config.getPassword() != null && !config.getPassword().isEmpty()) {
+                session.setPassword(config.getPassword());
+            }
+
+            session.connect();
+            Log.info("Successfully connected to " + config.getHost());
+
+            com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect();
+
+            Log.info("Starting upload...");
+            recursiveUpload(channelSftp, new java.io.File(localPath), remotePath);
+            Log.info("Upload completed.");
+
+            channelSftp.disconnect();
+            session.disconnect();
+
+        } catch (Exception e) {
+            Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    void recursiveUpload(com.jcraft.jsch.ChannelSftp sftp, java.io.File localFile, String remotePath)
+            throws com.jcraft.jsch.SftpException {
+        if (localFile.isDirectory()) {
+
+            try {
+                sftp.cd(remotePath);
+            } catch (com.jcraft.jsch.SftpException e) {
+
+                try {
+                    sftp.mkdir(remotePath);
+                    sftp.cd(remotePath);
+                } catch (com.jcraft.jsch.SftpException ex) {
+                    Log.error("Could not create remote directory: " + remotePath);
+                    throw ex;
+                }
+            }
+
+            java.io.File[] files = localFile.listFiles();
+            if (files != null) {
+                for (java.io.File file : files) {
+                    if (file.getName().equals(".git") || file.getName().equals("node_modules")
+                            || file.getName().equals("build")) {
+                        continue;
+                    }
+                    Log.info("Uploading " + file.getName());
+                    recursiveUpload(sftp, file, remotePath + "/" + file.getName());
+                }
+            }
+
+        } else {
+            try {
+                sftp.put(new java.io.FileInputStream(localFile), remotePath);
+                System.out.print("."); // Progress indicator
+            } catch (java.io.FileNotFoundException e) {
+                Log.error("File not found locally: " + localFile.getAbsolutePath());
+            }
+        }
+    }
+
+}
