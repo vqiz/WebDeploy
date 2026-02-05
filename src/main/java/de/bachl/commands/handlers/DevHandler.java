@@ -8,7 +8,6 @@ import de.bachl.Config.ProjectConfig;
 import de.bachl.commands.Command;
 import de.bachl.commands.CommandRegistry;
 import de.bachl.commands.CommandUtils;
-import de.bachl.utils.Log;
 
 public class DevHandler {
 
