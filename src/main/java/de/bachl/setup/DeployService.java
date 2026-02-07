@@ -155,6 +155,25 @@ public class DeployService {
 
             Log.info("Start SSH connection for command execution");
 
+            // Cleanup old releases (Keep current + 1 previous = 2 latest)
+            Log.info("Cleaning up old releases...");
+            String listCmd = "ls -1t " + storageBase + "/releases/";
+            // Using separate channel/method or incorporating output reading.
+            // Since we are in 'connect' which uses a generic session, we can use
+            // runCommandWithOutput logic if available or implement ad-hoc.
+            // Simpler approach: usage of complex Shell command to keep tail.
+            // ls -t | tail -n +3 | xargs -I {} rm -rf releases/{}
+            // Be careful with paths.
+            // Command: cd storageBase/releases && ls -t | tail -n +3 | xargs -I {} rm -rf
+            // {}
+            String cleanupCmd = "cd " + storageBase + "/releases && ls -1t | tail -n +3 | xargs -I {} rm -rf {}";
+            // Check if there are enough releases first to avoid error? xargs handles empty
+            // input usually gracefully or we can ignore error.
+            // "tail -n +3" outputs lines starting from line 3. If only 1 or 2 lines, output
+            // is empty. xargs with empty input does nothing.
+            sendCommand(cleanupCmd, session);
+            Log.info("Cleanup completed.");
+
         } catch (Exception e) {
             Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
             e.printStackTrace();

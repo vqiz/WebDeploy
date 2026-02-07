@@ -90,6 +90,10 @@ public class SystemHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String svc = args.get("--service-start");
+                if (svc == null || svc.equals("true") || svc.isEmpty()) {
+                    Log.error("Please specify a service to start (e.g. --service-start nginx).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo systemctl start " + svc, session, true);
             }
         });
@@ -105,6 +109,10 @@ public class SystemHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String svc = args.get("--service-stop");
+                if (svc == null || svc.equals("true") || svc.isEmpty()) {
+                    Log.error("Please specify a service to stop (e.g. --service-stop nginx).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo systemctl stop " + svc, session, true);
             }
         });
@@ -120,6 +128,10 @@ public class SystemHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String svc = args.get("--service-restart");
+                if (svc == null || svc.equals("true") || svc.isEmpty()) {
+                    Log.error("Please specify a service to restart (e.g. --service-restart nginx).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo systemctl restart " + svc, session, true);
             }
         });
@@ -213,6 +225,20 @@ public class SystemHandler {
             }
         });
 
+        registry.register(new Command() {
+            public String getCommand() {
+                return "--diskspace";
+            }
+
+            public String getDescription() {
+                return "Show available disk space.";
+            }
+
+            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
+                CommandUtils.sendCommand("df -h", session, true);
+            }
+        });
+
         // --- Users ---
 
         registry.register(new Command() {
@@ -226,6 +252,10 @@ public class SystemHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String user = args.get("--user-add");
+                if (user == null || user.equals("true") || user.isEmpty()) {
+                    Log.error("Please specify a username to add (e.g. --user-add john).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo useradd -m " + user, session, true);
             }
         });
@@ -241,6 +271,10 @@ public class SystemHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String user = args.get("--user-remove");
+                if (user == null || user.equals("true") || user.isEmpty()) {
+                    Log.error("Please specify a username to remove (e.g. --user-remove john).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo userdel -r " + user, session, true);
             }
         });

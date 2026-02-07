@@ -35,22 +35,43 @@ public class CommandService {
         new DevHandler().register(registry);
         new FileHandler().register(registry);
         new ProjectHandler().register(registry);
+        new de.bachl.commands.handlers.DomainHandler().register(registry);
     }
 
     private void loadConfig() {
         try {
             ConfigProvider cp = new ConfigProvider();
+
+            // 1. Identify override server
+            String overrideServer = null;
+            if (args.containsKey("--ssh") && !args.get("--ssh").equals("true")) {
+                overrideServer = args.get("--ssh");
+            } else if (args.containsKey("--server")) {
+                overrideServer = args.get("--server");
+            }
+
+            // 2. Load Project Config (for context)
             this.projectConfig = cp.getProjectConfig();
-            if (this.projectConfig != null) {
+
+            // 3. Determine Server Config
+            if (overrideServer != null) {
+                // Priority: CLI Argument
+                this.config = cp.getServerConfig(overrideServer);
+            } else if (this.projectConfig != null) {
+                // Fallback: Project Config
                 this.config = cp.getServerConfig(this.projectConfig.getServername());
             }
+
         } catch (Exception e) {
+            // ConfigProvider handles exits for missing files
         }
     }
 
     private Session getSession() throws Exception {
         if (config == null) {
-            Log.error("No project configuration found. Run command inside a WebDeploy project directory.");
+            Log.error("No valid server configuration found.");
+            Log.error(
+                    "Please specify a server using --server <name> or run this command inside a configured project directory.");
             System.exit(1);
         }
         return new DeployService().connectSSH(config);
@@ -71,20 +92,6 @@ public class CommandService {
                 System.out.println("WebDeploy v1.2.0 - Mega Upgrade");
                 return;
             }
-            if (args.containsKey("--ssh")) {
-                handleInteractive("");
-                return;
-            }
-            if (args.containsKey("--monitor")) {
-                handleInteractive("htop");
-                return;
-            }
-            if (args.containsKey("--pm2-logs")) {
-                String proc = args.get("--pm2-logs");
-                handleInteractive("pm2 logs " + (proc.equals("true") ? "" : proc));
-                return;
-            }
-
             // Find matching command
             Command found = null;
             String foundKey = null;
@@ -98,8 +105,8 @@ public class CommandService {
 
             if (found != null) {
                 Session session = null;
-                // Skip session for self-test or help-like commands
-                if (!foundKey.equals("--self-test")) {
+                // Skip session for self-test or independent commands
+                if (!foundKey.equals("--self-test") && !foundKey.equals("--setupdomain")) {
                     session = getSession();
                 }
 
@@ -111,6 +118,21 @@ public class CommandService {
                     }
                 }
             } else {
+                // Interactive / Fallback Commands
+                if (args.containsKey("--ssh")) {
+                    handleInteractive("");
+                    return;
+                }
+                if (args.containsKey("--monitor")) {
+                    handleInteractive("htop");
+                    return;
+                }
+                if (args.containsKey("--pm2-logs")) {
+                    String proc = args.get("--pm2-logs");
+                    handleInteractive("pm2 logs " + (proc.equals("true") ? "" : proc));
+                    return;
+                }
+
                 if (args.containsKey("--list-projects"))
                     Log.info("Use --listservers to see servers.");
                 else

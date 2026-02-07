@@ -125,12 +125,14 @@ Your project configuration is stored in `webdeploy.config`.
 | `--setup` | Initialize a new server remote. |
 | `--ssh <server>` | SSH into a configured server. |
 | `--setupproject` | Write `webdeploy.config` for the current folder. |
+| `--editproject` | Modify existing project config. Supports flags like `--server`, `--domain`, `--build-command`, `--upload-path`, etc. |
 | `--deploy` | Build and deploy the project. |
 | `--rollback` | Revert the live site to the previous release. |
 | `--status` | Show Nginx status. |
 | `--logs` | View Nginx error logs. |
 | `--monitor` | Launch `htop` on the remote server. |
-| `--ssl` | Auto-configure Let's Encrypt SSL. |
+| `--diskspace` | Show available disk space. |
+| `--setupdomain` | Configure a domain and SSL for an existing project. |
 | `--help` | Show all available commands. |
 
 ---

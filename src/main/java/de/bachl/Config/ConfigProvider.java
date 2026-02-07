@@ -34,7 +34,7 @@ public class ConfigProvider {
 
     public Config getServerConfig(String servername) {
         if (!new File(System.getProperty("user.home") + "/.webdeploy/servers/" + servername).exists()) {
-            Log.error("No Server config file found");
+            Log.error("Server configuration not found for: " + servername);
             System.exit(1);
         }
         return gson.fromJson(fileWriter.readFile(System.getProperty("user.home") + "/.webdeploy/servers/" + servername),

@@ -40,6 +40,10 @@ public class SecurityHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String port = args.get("--firewall-allow");
+                if (port == null || port.equals("true") || port.isEmpty()) {
+                    Log.error("Please specify a port to allow (e.g. --firewall-allow 80).");
+                    return;
+                }
                 CommandUtils.sendCommand("sudo ufw allow " + port, session, true);
             }
         });
@@ -55,26 +59,11 @@ public class SecurityHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 String port = args.get("--firewall-deny");
-                CommandUtils.sendCommand("sudo ufw deny " + port, session, true);
-            }
-        });
-
-        registry.register(new Command() {
-            public String getCommand() {
-                return "--ssl";
-            }
-
-            public String getDescription() {
-                return "Setup SSL (Certbot) for current project.";
-            }
-
-            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
-                if (config == null || !config.isEnabledomain()) {
-                    Log.error("Project domain not configured.");
+                if (port == null || port.equals("true") || port.isEmpty()) {
+                    Log.error("Please specify a port to deny (e.g. --firewall-deny 80).");
                     return;
                 }
-                new SSLService().installCertbot(session);
-                new SSLService().setupSSL(session, config.getDomain());
+                CommandUtils.sendCommand("sudo ufw deny " + port, session, true);
             }
         });
 

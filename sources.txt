@@ -17,6 +17,8 @@ src/main/java/de/bachl/commands/handlers/ProjectHandler.java
 src/main/java/de/bachl/commands/handlers/DevHandler.java
 src/main/java/de/bachl/commands/handlers/SystemHandler.java
 src/main/java/de/bachl/commands/handlers/WebHandler.java
+src/main/java/de/bachl/commands/handlers/EditProjectHandler.java
+src/main/java/de/bachl/commands/handlers/DomainHandler.java
 src/main/java/de/bachl/commands/handlers/FileHandler.java
 src/main/java/de/bachl/commands/handlers/SecurityHandler.java
 src/main/java/de/bachl/services/CommandService.java

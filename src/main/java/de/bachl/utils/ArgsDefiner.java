@@ -24,6 +24,10 @@ public class ArgsDefiner {
             new ProjectProvider(args).setup();
             System.exit(0);
         }
+        if (args.containsKey("--editproject")) {
+            new de.bachl.commands.handlers.EditProjectHandler().handle(args);
+            System.exit(0);
+        }
         if (args.containsKey("--deploy")) {
             new DeployService().deploy();
             System.exit(0);
