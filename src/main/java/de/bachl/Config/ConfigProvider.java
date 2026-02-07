@@ -27,8 +27,7 @@ public class ConfigProvider {
 
     public ProjectConfig getProjectConfig() {
         if (!new File(dir + "/webdeploy.config").exists()) {
-            Log.error("No config file found");
-            System.exit(1);
+            return null;
         }
         return gson.fromJson(fileWriter.readFile(dir + "/webdeploy.config"), ProjectConfig.class);
     }

@@ -16,8 +16,32 @@ public class DeployService {
         ProjectConfig projectConfig = configProvider.getProjectConfig();
         Config config = configProvider.getServerConfig(projectConfig.getServername());
 
+        // Execute Build Command
+        if (projectConfig.getBuildCommand() != null && !projectConfig.getBuildCommand().isEmpty()) {
+            Log.info("Executing build command: " + projectConfig.getBuildCommand());
+            try {
+                ProcessBuilder pb = new ProcessBuilder("bash", "-c", projectConfig.getBuildCommand());
+                pb.inheritIO();
+                Process p = pb.start();
+                int exitCode = p.waitFor();
+                if (exitCode != 0) {
+                    Log.error("Build command failed with exit code: " + exitCode);
+                    System.exit(1);
+                }
+                Log.info("Build successful.");
+            } catch (Exception e) {
+                Log.error("Failed to execute build command: " + e.getMessage());
+                System.exit(1);
+            }
+        }
+
+        String uploadDir = projectConfig.getUploadPath();
+        if (uploadDir == null || uploadDir.isEmpty()) {
+            uploadDir = "dist";
+        }
+
         Log.info("Start sftp connection for File upload");
-        connect(config, dir + "/dist", "/var/www/html/" + projectConfig.getProjectname());
+        connect(config, dir + "/" + uploadDir, "/var/www/html/" + projectConfig.getProjectname());
 
         Log.info("Start SSH connection for command execution");
         try {
@@ -93,15 +117,43 @@ public class DeployService {
             session.connect();
             Log.info("Successfully connected to " + config.getHost());
 
+            String projectName = new java.io.File(remotePath).getName();
+            String storageBase = "/var/www/webdeploy/" + projectName;
+            String releaseName = String.valueOf(System.currentTimeMillis());
+            String releasePath = storageBase + "/releases/" + releaseName;
+            String currentLink = storageBase + "/current";
+            String publicLink = remotePath; // /var/www/html/projectname
+
+            // Ensure storage directories exist
+            sendCommand("mkdir -p " + releasePath, session);
+
             com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
             channelSftp.connect();
 
-            Log.info("Starting upload...");
-            recursiveUpload(channelSftp, new java.io.File(localPath), remotePath);
+            Log.info("Starting upload to release: " + releaseName);
+            recursiveUpload(channelSftp, new java.io.File(localPath), releasePath);
             Log.info("Upload completed.");
 
             channelSftp.disconnect();
-            session.disconnect();
+
+            // Update internal 'current' symlink
+            Log.info("Updating internal current link...");
+            // Ensure storageBase exists? mkdir -p releasePath creates it.
+            sendCommand("ln -sfn " + releasePath + " " + currentLink, session);
+
+            // Update public symlink /var/www/html/projectname ->
+            // /var/www/webdeploy/projectname/current
+            Log.info("Updating public access link...");
+            // Check if publicLink exists and is a directory (not a symlink)
+            // If so, move it away (legacy migration)
+            String checkCmd = "if [ -d \"" + publicLink + "\" ] && [ ! -L \"" + publicLink + "\" ]; then mv \""
+                    + publicLink + "\" \"" + publicLink + "_backup_" + releaseName + "\"; fi";
+            sendCommand(checkCmd, session);
+
+            // Create/Update the public symlink
+            sendCommand("ln -sfn " + currentLink + " " + publicLink, session);
+
+            Log.info("Start SSH connection for command execution");
 
         } catch (Exception e) {
             Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());

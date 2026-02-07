@@ -59,6 +59,10 @@ public class CommandService {
     public void handle() {
         try {
             // Priority Local Commands
+            if (args.containsKey("--version")) {
+                System.out.println("WebDeploy v1.2.0");
+                return;
+            }
             if (args.containsKey("--help")) {
                 registry.printHelp();
                 return;
@@ -120,11 +124,26 @@ public class CommandService {
     }
 
     private void handleInteractive(String cmd) throws Exception {
-        if (config == null) {
-            Log.error("Project config missing for SSH.");
+        // Check if server name is provided as argument to --ssh
+        String serverArg = args.get("--ssh");
+        Config effectiveConfig = this.config;
+
+        if (serverArg != null && !serverArg.isEmpty() && !serverArg.equals("true")) {
+            // Try to load server config by name
+            try {
+                effectiveConfig = new ConfigProvider().getServerConfig(serverArg);
+            } catch (Exception e) {
+                Log.error("Server config not found: " + serverArg);
+                return;
+            }
+        }
+
+        if (effectiveConfig == null) {
+            Log.error("Project config missing for SSH. Run inside a project or use --ssh <servername>");
             return;
         }
-        CommandUtils.runInteractive(config.getKeypath(), config.getUser(), config.getHost(), cmd);
+        CommandUtils.runInteractive(effectiveConfig.getKeypath(), effectiveConfig.getUser(), effectiveConfig.getHost(),
+                cmd);
     }
 
 }

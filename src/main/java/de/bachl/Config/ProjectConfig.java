@@ -12,14 +12,19 @@ public class ProjectConfig {
     public ProjectConfig() {
     }
 
+    private String buildCommand;
+    private String uploadPath;
+
     public ProjectConfig(String servername, String projectname, boolean needsbackend, String backendpath,
-            boolean enabledomain, String domain) {
+            boolean enabledomain, String domain, String buildCommand, String uploadPath) {
         this.servername = servername;
         this.projectname = projectname;
         this.needsbackend = needsbackend;
         this.backendpath = backendpath;
         this.enabledomain = enabledomain;
         this.domain = domain;
+        this.buildCommand = buildCommand;
+        this.uploadPath = uploadPath;
     }
 
     public String getServername() {
@@ -68,5 +73,21 @@ public class ProjectConfig {
 
     public void setDomain(String domain) {
         this.domain = domain;
+    }
+
+    public String getBuildCommand() {
+        return buildCommand;
+    }
+
+    public void setBuildCommand(String buildCommand) {
+        this.buildCommand = buildCommand;
+    }
+
+    public String getUploadPath() {
+        return uploadPath;
+    }
+
+    public void setUploadPath(String uploadPath) {
+        this.uploadPath = uploadPath;
     }
 }

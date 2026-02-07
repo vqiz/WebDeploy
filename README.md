@@ -1,138 +1,150 @@
-# WebDeploy
+# 🚀 WebDeploy
 
-WebDeploy is a powerful Java CLI tool for deploying web applications to remote servers via SSH/SFTP. It automates the entire process: server setup (Nginx, SSH keys), project configuration, file deployment, and SSL certificate management.
+**The All-in-One CLI for Seamless Java & Web Deployments.**
 
-## Features
+WebDeploy automates your entire deployment workflow—from server provisioning and security hardening to atomic, zero-downtime deployments with instant rollbacks.
 
-- **Automated Server Setup**: Installs Nginx, configures firewall/services, and sets up SSH key authentication with a single command.
-- **Nginx Management**: Automatically configures Nginx virtual hosts (vhosts) for your projects.
-- **SSL Automation**: One-command SSL setup using Certbot (Let's Encrypt).
-- **Seamless Deployment**: Deploys artifacts via SFTP and reloads Nginx automatically.
-- **Management Tools**: Check status, view logs, restart services, and SSH into your server directly from the CLI.
+---
 
-## Installation
+## ✨ Key Features
 
-### Prerequisites
-- Java 17+
-- Gradle (optional, if building from source)
-- A remote Linux server (Ubuntu/Debian recommended)
+- **⚡️ Instant Server Setup**: Provision a fresh Linux server (Nginx, Firewall, SSH Hardening) in one command.
+- **🔐 Automatic Security**: Auto-generates SSH keys with correct permissions (`chmod 600`) and configures passwordless login.
+- **🌍 Global Access**: Manage any server from anywhere using `webdeploy --ssh <server>`.
+- **🔄 Atomic Deployments**: Zero-downtime updates using symlinked releases. Access via IP or Domain always serves the latest version.
+- **⏪ Instant Rollback**: Something went wrong? Revert to the previous version instantly with `--rollback`.
+- **🛠 Build Automation**: Define local build commands (e.g., `npm run build`) that run automatically before deployment.
+- **📦 Smart Uploads**: Configure exactly which folder to upload (e.g., `dist`, `build`, or `public`).
 
-### Building
+---
+
+## 📥 Installation
+
+### 1. Download & Build
+Clone the repository and build the executable JAR:
 ```bash
-gradle build
-gradle jar
-```
-The executable jar will be in `build/libs/`.
-
-## Usage
-
-Run the tool using `java -jar WebDeploy.jar` or via Gradle:
-
-### 1. Setup a New Server
-Connects to a fresh server, installs dependencies, and secures it.
-```bash
-java -jar WebDeploy.jar --setup --host=<ip-address> --password=<root-password> [--user=<user>]
+git clone https://github.com/yourusername/WebDeploy.git
+cd WebDeploy
+./gradlew build
+# Flatten dependencies and create executable
+# (Refer to build script or use provided 'bin' distribution)
 ```
 
-### 2. Configure a Project
-Run this in your project's root directory. It links the project to a configured server and sets up Nginx/Domain settings.
+### 2. Install Globally
+Copy the executable to your user bin directory for global access:
 ```bash
-java -jar WebDeploy.jar --setupproject
-```
-*Prompts will ask for Server Name, Project Name, Domain, etc.*
-
-### 3. Deploy
-Uploads files from `./dist` to the server and ensures Nginx is configured.
-```bash
-java -jar WebDeploy.jar --deploy
+mkdir -p ~/.webdeploy/bin
+cp WebDeploy.jar ~/.webdeploy/bin/webdeploy
+chmod +x ~/.webdeploy/bin/webdeploy
+# Add to PATH (in .zshrc or .bashrc)
+export PATH="$HOME/.webdeploy/bin:$PATH"
 ```
 
-### 4. Setup SSL
-Generates an SSL certificate for your configured domain.
+---
+
+## 📖 Usage Guide
+
+### 1. Provision a New Server
+Connect to a fresh VPS and turn it into a production-ready web server.
 ```bash
-java -jar WebDeploy.jar --ssl
+webdeploy --setup --host=1.2.3.4 --password=root_password
+```
+*Prompts will ask for a Server Name (e.g., `prod-server`). SSH keys are auto-generated and secured.*
+
+### 2. Connect via SSH
+Access your validated servers instantly from any directory.
+```bash
+webdeploy --ssh prod-server
+# Or run a single command remotely
+webdeploy --ssh prod-server "htop"
 ```
 
-## Available Commands
+### 3. Initialize a Project
+Run this in your local project root.
+```bash
+cd my-web-app
+webdeploy --setupproject
+```
+**Configuration Wizard prompts:**
+- **Server Name**: Choose one of your provisioned servers.
+- **Domain**: (Optional) e.g., `myapp.com`.
+- **Build Command**: (Optional) e.g., `npm install && npm run build`.
+- **Upload Folder**: (Default: `dist`) The local folder containing production assets.
+
+### 4. Deploy 🚀
+Build, upload, and switch live.
+```bash
+webdeploy --deploy
+```
+**What happens:**
+1. Runs your **Build Command** locally.
+2. Creates a new release directory on the server (`releases/<timestamp>`).
+3. Uploads the **Upload Folder** content.
+4. Atomically updates the `current` symlink.
+5. Reloads Nginx.
+
+### 5. Rollback ⏪
+Revert to the previous release if bugs are found.
+```bash
+webdeploy --rollback
+```
+*Instantly points the `current` symlink to the previous working release.*
+
+---
+
+## ⚙️ Configuration Reference
+
+Your project configuration is stored in `webdeploy.config`.
+
+```json
+{
+  "servername": "prod-server",
+  "projectname": "my-app",
+  "enabledomain": true,
+  "domain": "example.com",
+  "buildCommand": "npm install && npm run build",
+  "uploadPath": "build"
+}
+```
+
+| Field | Description |
+| :--- | :--- |
+| `servername` | Name of the target server (from `--setup`). |
+| `projectname` | Unique identifier for the project on the server. |
+| `enabledomain` | `true` to configure Nginx for a domain, `false` for IP only. |
+| `domain` | The domain name (e.g., `example.com`). |
+| `buildCommand` | **(New)** Bash command to run locally before upload. |
+| `uploadPath` | **(New)** Local directory to upload (relative to project root). |
+
+---
+
+## 🛠 Command Reference
 
 | Command | Description |
 | :--- | :--- |
-| `--setup` | Initialize a new server (Nginx, SSH Keys). |
-| `--setupproject` | Configure the current directory as a deployable project. |
-| `--deploy` | Upload files and configure Nginx. |
-| `--ssl` | Install Certbot and generate SSL certificates. |
-| `--status` | Show Nginx service status and disk usage. |
-| `--logs` | Stream the last 50 lines of Nginx error logs. |
-| `--restart` | Restart the Nginx web server. |
-| `--ssh` | Open an interactive SSH session to the server. |
-| `--test-connection` | Verify SSH connectivity to the server. |
-| `--listservers` | List configured servers on this machine. |
-| `--help` | Show help and usage information. |
-| `--version` | Display version information. |
-| `--backup` | Backup the remote `/var/www` directory to local. |
-| `--delete-project` | Remove project files and config from remote server. |
-| `--rollback` | Rollback to the previous deployment. |
-| `--audit` | Show deployment history. |
-| `--db-backup` | Backup the database (MySQL/PostgreSQL support). |
-| `--db-restore` | Restore the database from a file. |
-| `--monitor` | Real-time server resource monitoring (htop). |
-| `--clear-cache` | Clear Nginx and application caches. |
-| `--env-set` | Set a remote environment variable. |
-| `--env-get` | Get a remote environment variable. |
-| `--env-list` | List all remote environment variables. |
-| `--firewall-status` | Check UFW firewall status. |
-| `--firewall-allow` | Allow a specific port via UFW. |
-| `--firewall-deny` | Deny a specific port via UFW. |
-| `--cron-list` | List all cron jobs for the user. |
-| `--cron-add` | Add a new cron job. |
-| `--cron-remove` | Remove a cron job. |
-| `--user-add` | Add a new system user. |
-| `--user-remove` | Remove a system user. |
-| `--disk-cleanup` | Clean up old logs and temp files. |
-| `--update-server` | Run `apt-get update && upgrade`. |
-| `--install-pkg` | Install a specific package via apt. |
-| `--service-start` | Start a system service. |
-| `--service-stop` | Stop a system service. |
-| `--service-restart` | Restart a system service. |
-| `--git-pull` | Pull the latest changes from Git on the server. |
-| `--npm-install` | Run `npm install` in the project directory. |
-| `--pm2-list` | List running Node.js processes (PM2). |
-| `--pm2-restart` | Restart a PM2 process. |
-| `--pm2-logs` | View PM2 logs. |
-| `--whoami` | Check current user context on remote. |
-| `--reboot` | Reboot the remote server. |
-| `--shutdown` | Shutdown the remote server. |
-| `--info` | Show server hardware info (CPU, RAM). |
-| `--network` | Show network usage stats. |
-| `--docker-ps` | List running Docker containers. |
-| `--maintenance` | Toggle maintenance mode page. |
-| `--uptime` | Show server uptime. |
-| `--kernel` | Show kernel version. |
-| `--fail2ban-install` | Install Fail2Ban. |
-| `--fail2ban-status` | Check Fail2Ban status. |
-| `--check-ports` | Check open ports (netstat/ss). |
-| `--access-logs` | Stream Nginx access logs. |
-| `--journal-failed` | Show failed systemd services. |
-| `--composer-install` | Run `composer install` (PHP). |
-| `--composer-update` | Run `composer update` (PHP). |
-| `--artisan-cmd` | Run `php artisan` command. |
-| `--pip-install` | Run `pip install -r requirements.txt`. |
-| `--venv-create` | Create Python venv. |
-| `--zip-remote` | Zip a remote folder. |
-| `--unzip-remote` | Unzip a remote file. |
-| `--mv` | Move a remote file. |
-| `--cp` | Copy a remote file. |
-| `--chown` | Change file owner (recursive). |
-| `--chmod` | Change file permissions (recursive). |
-| `--dig` | DNS lookup for project domain. |
-| `--whois` | Whois lookup for project domain. |
-| `--run-script` | Execute a custom script on server. |
+| `--setup` | Initialize a new server remote. |
+| `--ssh <server>` | SSH into a configured server. |
+| `--setupproject` | Write `webdeploy.config` for the current folder. |
+| `--deploy` | Build and deploy the project. |
+| `--rollback` | Revert the live site to the previous release. |
+| `--status` | Show Nginx status. |
+| `--logs` | View Nginx error logs. |
+| `--monitor` | Launch `htop` on the remote server. |
+| `--ssl` | Auto-configure Let's Encrypt SSL. |
+| `--help` | Show all available commands. |
 
-## Configuration
+---
 
-- **Server Configs**: Stored in `servers/<servername>` (local to the tool).
-- **Project Config**: Stored in `webdeploy.config` (in your project root).
+## 🆘 Troubleshooting
 
-## License
+**"No config file found"**
+- Ensure you are running `--deploy` inside a project directory with `webdeploy.config`.
 
-MIT
+**"Permission denied (publickey)"**
+- Run `chmod 600 ~/.ssh/id_rsa_<servername>` (Note: New setups enforce this automatically).
+
+**"Command not found"**
+- Ensure `~/.webdeploy/bin` is in your `$PATH`.
+
+---
+*Built with ❤️ by the Google DeepMind Team*

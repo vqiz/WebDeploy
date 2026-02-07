@@ -124,6 +124,14 @@ public class SetupProvider {
 
         kpair.writePrivateKey(keyPath);
         kpair.writePublicKey(keyPath + ".pub", "webdeploy-auto-generated");
+
+        // Fix permissions for private key
+        try {
+            new ProcessBuilder("chmod", "600", keyPath).start().waitFor();
+        } catch (Exception e) {
+            Log.warn("Could not set 600 permissions on private key: " + e.getMessage());
+        }
+
         Log.info("Generated SSH keys at: " + keyPath);
 
         java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();

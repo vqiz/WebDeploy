@@ -51,11 +51,20 @@ public class ProjectProvider {
                 domain = scanner.nextLine();
             }
 
+            Log.info("Enter build command (leave empty to skip):");
+            String buildCommand = scanner.nextLine();
+
+            Log.info("Enter local folder to upload (default: dist):");
+            String uploadPath = scanner.nextLine();
+            if (uploadPath.trim().isEmpty()) {
+                uploadPath = "dist";
+            }
+
             // scanner.close(); // Do not close System.in
 
             ProjectConfig projectConfig = new ProjectConfig(server, project, needbackend.equals("y"), backendpath,
                     enableDomain.equalsIgnoreCase("y"),
-                    domain);
+                    domain, buildCommand, uploadPath);
 
             new ConfigProvider().setupProject(projectConfig);
         }

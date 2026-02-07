@@ -79,7 +79,63 @@ public class ProjectHandler {
             }
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
-                Log.info("Rollback requires a versioned deployment strategy which is not yet enabled.");
+                String projectName = config.getProjectname();
+                String storageBase = "/var/www/webdeploy/" + projectName;
+                String releasesPath = storageBase + "/releases";
+
+                // List releases sorted by name (timestamp) - assuming robust output processing
+                // but keeping it simple for now
+                // ls -1t sort by modification time, but names are timestamps so sort -n works
+                // too.
+                // Using ls -1 for simple listing.
+                String output = "";
+                try {
+                    output = CommandUtils.runCommandWithOutput("ls -1 " + releasesPath + " | sort", session);
+                } catch (Exception e) {
+                    Log.error("Failed to list releases: " + e.getMessage());
+                    return;
+                }
+
+                if (output.isEmpty()) {
+                    Log.error("No releases found.");
+                    return;
+                }
+                String[] releases = output.split("\n");
+
+                // Get current release directory name
+                String currentRelease = "";
+                String currentLink = CommandUtils.runCommandWithOutput("readlink " + storageBase + "/current", session);
+                if (currentLink != null && currentLink.contains("/")) {
+                    currentRelease = currentLink.substring(currentLink.lastIndexOf("/") + 1).trim();
+                } else if (currentLink != null) {
+                    currentRelease = currentLink.trim();
+                }
+
+                String previousRelease = null;
+                // Identify current index and pick previous
+                // Since output is sorted (oldest first), previous is index-1
+                for (int i = 0; i < releases.length; i++) {
+                    if (releases[i].trim().equals(currentRelease)) {
+                        if (i > 0) {
+                            // Correct previous is the one before current in sorted list
+                            previousRelease = releases[i - 1].trim();
+                        }
+                        break;
+                    }
+                }
+
+                if (previousRelease != null && !previousRelease.isEmpty()) {
+                    Log.info("Rolling back from " + currentRelease + " to " + previousRelease);
+                    // Update internal symlink
+                    CommandUtils.sendCommand(
+                            "ln -sfn " + releasesPath + "/" + previousRelease + " " + storageBase + "/current", session,
+                            true);
+                    // Reload Nginx
+                    CommandUtils.sendCommand("sudo systemctl reload nginx", session, true);
+                    Log.info("Rollback successful.");
+                } else {
+                    Log.warn("No previous release found to rollback to (Current: " + currentRelease + ").");
+                }
             }
         });
 
