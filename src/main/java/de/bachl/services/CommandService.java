@@ -36,6 +36,7 @@ public class CommandService {
         new FileHandler().register(registry);
         new ProjectHandler().register(registry);
         new de.bachl.commands.handlers.DomainHandler().register(registry);
+        new de.bachl.commands.handlers.SFTPHandler().register(registry);
     }
 
     private void loadConfig() {
@@ -106,7 +107,8 @@ public class CommandService {
             if (found != null) {
                 Session session = null;
                 // Skip session for self-test or independent commands
-                if (!foundKey.equals("--self-test") && !foundKey.equals("--setupdomain")) {
+                if (!foundKey.equals("--self-test") && !foundKey.equals("--setupdomain")
+                        && !foundKey.equals("--sftp")) {
                     session = getSession();
                 }
 

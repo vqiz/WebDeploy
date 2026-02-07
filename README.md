@@ -132,6 +132,7 @@ Your project configuration is stored in `webdeploy.config`.
 | `--logs` | View Nginx error logs. |
 | `--monitor` | Launch `htop` on the remote server. |
 | `--diskspace` | Show available disk space. |
+| `--sftp` | Open SFTP session in new Terminal (Mac only). |
 | `--setupdomain` | Configure a domain and SSL for an existing project. |
 | `--help` | Show all available commands. |
 
