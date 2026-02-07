@@ -1,0 +1,7 @@
+{
+  "keypath": "id_rsa",
+  "name": "emulator",
+  "host": "localhost",
+  "user": "root",
+  "password": ""
+}

@@ -25,7 +25,7 @@ public class ProjectProvider {
             Log.info("Please enter a server name:");
             String server = scanner.nextLine();
 
-            if (!new File("servers/" + server).exists()) {
+            if (!new File(System.getProperty("user.home") + "/.webdeploy/servers/" + server).exists()) {
                 Log.error("Server " + server + " does not exist");
                 System.exit(1);
             }

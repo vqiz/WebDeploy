@@ -25,6 +25,14 @@ public class NginxService {
                 "    root /var/www/html/" + projectName + ";\n" +
                 "    index index.html index.htm;\n" +
                 "\n" +
+                "    if (-f $document_root/maintenance.html) {\n" +
+                "        return 503;\n" +
+                "    }\n" +
+                "    error_page 503 @maintenance;\n" +
+                "    location @maintenance {\n" +
+                "        rewrite ^(.*)$ /maintenance.html break;\n" +
+                "    }\n" +
+                "\n" +
                 "    location / {\n" +
                 "        try_files $uri $uri/ =404;\n" +
                 "    }\n" +

@@ -83,18 +83,28 @@ public class CommandService {
 
             // Find matching command
             Command found = null;
-            for (String key : args.keySet()) {
-                found = registry.find(key);
-                if (found != null)
+            String foundKey = null;
+            for (String k : args.keySet()) {
+                found = registry.find(k);
+                if (found != null) {
+                    foundKey = k;
                     break;
+                }
             }
 
             if (found != null) {
-                Session session = getSession();
+                Session session = null;
+                // Skip session for self-test or help-like commands
+                if (!foundKey.equals("--self-test")) {
+                    session = getSession();
+                }
+
                 try {
                     found.execute(session, args, projectConfig);
                 } finally {
-                    session.disconnect();
+                    if (session != null) {
+                        session.disconnect();
+                    }
                 }
             } else {
                 if (args.containsKey("--list-projects"))

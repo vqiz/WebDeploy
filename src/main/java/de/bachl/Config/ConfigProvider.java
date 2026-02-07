@@ -15,7 +15,9 @@ public class ConfigProvider {
 
     public void setupServer(Config config) {
         Log.info("Writing Config File for " + config.getName());
-        fileWriter.writeFile("servers/" + config.getName(), gson.toJson(config));
+        new File(System.getProperty("user.home") + "/.webdeploy/servers/").mkdirs();
+        fileWriter.writeFile(System.getProperty("user.home") + "/.webdeploy/servers/" + config.getName(),
+                gson.toJson(config));
     }
 
     public void setupProject(ProjectConfig config) {
@@ -32,11 +34,12 @@ public class ConfigProvider {
     }
 
     public Config getServerConfig(String servername) {
-        if (!new File("servers/" + servername).exists()) {
+        if (!new File(System.getProperty("user.home") + "/.webdeploy/servers/" + servername).exists()) {
             Log.error("No Server config file found");
             System.exit(1);
         }
-        return gson.fromJson(fileWriter.readFile("servers/" + servername), Config.class);
+        return gson.fromJson(fileWriter.readFile(System.getProperty("user.home") + "/.webdeploy/servers/" + servername),
+                Config.class);
     }
 
 }

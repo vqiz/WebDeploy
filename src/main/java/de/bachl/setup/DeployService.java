@@ -17,7 +17,7 @@ public class DeployService {
         Config config = configProvider.getServerConfig(projectConfig.getServername());
 
         Log.info("Start sftp connection for File upload");
-        connect(config, dir + "/dist", "/var/www/html/" + config.getName());
+        connect(config, dir + "/dist", "/var/www/html/" + projectConfig.getProjectname());
 
         Log.info("Start SSH connection for command execution");
         try {

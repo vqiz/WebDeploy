@@ -23,7 +23,7 @@ public class CommandUtils {
                 if (in.available() > 0)
                     continue;
                 if (channel.getExitStatus() != 0 && !streamOutput) {
-                    // throw new Exception("Exit code: " + channel.getExitStatus());
+                    throw new Exception("Exit code: " + channel.getExitStatus());
                 }
                 break;
             }

@@ -8,6 +8,7 @@ import de.bachl.Config.ProjectConfig;
 import de.bachl.commands.Command;
 import de.bachl.commands.CommandRegistry;
 import de.bachl.commands.CommandUtils;
+import de.bachl.utils.Log;
 
 public class WebHandler {
 
@@ -104,5 +105,39 @@ public class WebHandler {
             }
         });
 
+        registry.register(new Command() {
+            public String getCommand() {
+                return "--maintenance";
+            }
+
+            public String getDescription() {
+                return "Toggle maintenance mode page.";
+            }
+
+            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
+                if (config == null) {
+                    Log.error("Project config required.");
+                    return;
+                }
+                String path = "/var/www/html/" + config.getProjectname() + "/maintenance.html";
+                // Check if exists
+                boolean exists = false;
+                try {
+                    // Simple check: ls path. If exit code 0, it exists.
+                    CommandUtils.sendCommand("ls " + path, session, false);
+                    exists = true;
+                } catch (Exception e) {
+                    exists = false;
+                }
+
+                if (exists) {
+                    Log.info("Disabling maintenance mode...");
+                    CommandUtils.sendCommand("rm " + path, session, true);
+                } else {
+                    Log.info("Enabling maintenance mode...");
+                    CommandUtils.sendCommand("echo '<h1>Maintenance Mode</h1>' > " + path, session, true);
+                }
+            }
+        });
     }
 }

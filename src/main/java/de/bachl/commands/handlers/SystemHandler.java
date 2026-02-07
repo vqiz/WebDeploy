@@ -245,6 +245,20 @@ public class SystemHandler {
             }
         });
 
+        registry.register(new Command() {
+            public String getCommand() {
+                return "--test-connection";
+            }
+
+            public String getDescription() {
+                return "Verify SSH connectivity to the server.";
+            }
+
+            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
+                CommandUtils.sendCommand("echo 'Connection Successful'", session, true);
+            }
+        });
+
     }
 
 }
