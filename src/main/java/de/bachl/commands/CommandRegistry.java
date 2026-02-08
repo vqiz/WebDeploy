@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands;
 
 import java.util.ArrayList;
@@ -25,7 +30,6 @@ public class CommandRegistry {
         List<String> keys = new ArrayList<>(commands.keySet());
         Collections.sort(keys);
 
-        // Find max length for padding
         int maxLen = 0;
         for (String key : keys) {
             maxLen = Math.max(maxLen, key.length());
@@ -34,7 +38,7 @@ public class CommandRegistry {
         for (String key : keys) {
             Command cmd = commands.get(key);
             String desc = cmd.getDescription();
-            // Pad key
+            
             String paddedKey = String.format("%-" + (maxLen + 4) + "s", key);
             System.out.println(paddedKey + desc);
         }

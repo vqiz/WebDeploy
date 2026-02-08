@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl;
 
 import java.util.HashMap;
@@ -11,6 +16,5 @@ public class WebDeploy {
       HashMap<String, String> args = new ArgsConstructor(argmain).parse();
       new ArgsDefiner(args).define();
     }
-
 
 }

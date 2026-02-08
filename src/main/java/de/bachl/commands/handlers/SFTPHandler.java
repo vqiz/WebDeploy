@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.io.File;
@@ -27,15 +32,13 @@ public class SFTPHandler {
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig projectConfig)
                     throws Exception {
-                // 1. Check OS
+                
                 String os = System.getProperty("os.name").toLowerCase();
                 if (!os.contains("mac")) {
                     Log.error("This feature is only available on macOS.");
                     return;
                 }
 
-                // 2. Resolve Server Config
-                // Check CLI override
                 String serverName = null;
                 if (args.containsKey("--server")) {
                     serverName = args.get("--server");
@@ -52,15 +55,14 @@ public class SFTPHandler {
                     } else if (projectConfig != null) {
                         serverConfig = cp.getServerConfig(projectConfig.getServername());
                     } else {
-                        // Fallback: Try loading project config manually if passed as null
+                        
                         ProjectConfig pc = cp.getProjectConfig();
                         if (pc != null) {
                             serverConfig = cp.getServerConfig(pc.getServername());
                         }
                     }
                 } catch (Exception e) {
-                    // ConfigProvider exits 1 if not found usually, or throws.
-                    // We catch here just in case.
+
                 }
 
                 if (serverConfig == null) {
@@ -69,7 +71,6 @@ public class SFTPHandler {
                     return;
                 }
 
-                // 3. Construct .duck file content
                 String keyPath = serverConfig.getKeypath();
 
                 if (keyPath.startsWith("~")) {
@@ -106,7 +107,6 @@ public class SFTPHandler {
                         "</dict>\n" +
                         "</plist>";
 
-                // Write to temp file
                 String tempDir = System.getProperty("java.io.tmpdir");
                 String duckFilePath = tempDir + (tempDir.endsWith("/") ? "" : "/") + "webdeploy-"
                         + serverConfig.getName() + ".duck";

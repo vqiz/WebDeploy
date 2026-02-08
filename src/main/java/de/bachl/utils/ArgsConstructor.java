@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.utils;
 
 import java.util.HashMap;
@@ -17,19 +22,15 @@ public class ArgsConstructor {
             String current = args[i];
 
             if (current.startsWith("--")) {
-                // It's a flag/key
+                
                 String key = current;
-                String value = "true"; // Default for boolean flags
+                String value = "true"; 
 
-                // Check if next arg is a value (not starting with --)
                 if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
                     value = args[i + 1];
-                    i++; // Skip next arg since we consumed it as value
+                    i++; 
                 }
 
-                // Handle --key=value style if necessary, but for now assuming space separation
-                // or simple flags
-                // If user passes --host=1.2.3.4, split it
                 if (key.contains("=")) {
                     String[] parts = key.split("=", 2);
                     key = parts[0];

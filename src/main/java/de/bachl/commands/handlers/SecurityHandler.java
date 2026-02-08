@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.util.HashMap;
@@ -67,8 +72,6 @@ public class SecurityHandler {
             }
         });
 
-        // --- New Handlers ---
-
         registry.register(new Command() {
             public String getCommand() {
                 return "--fail2ban-install";
@@ -110,7 +113,7 @@ public class SecurityHandler {
             }
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
-                // install net-tools if needed? usually ss is available
+                
                 CommandUtils.sendCommand("ss -tuln", session, true);
             }
         });

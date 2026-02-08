@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.util.HashMap;
@@ -53,7 +58,7 @@ public class FileHandler {
             }
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
-                String p = args.get("--mv"); // Warning: splitting handling needed or quote usage by user
+                String p = args.get("--mv"); 
                 CommandUtils.sendCommand("mv " + p, session, true);
             }
         });
@@ -102,12 +107,6 @@ public class FileHandler {
                 CommandUtils.sendCommand("sudo chmod -R " + p, session, true);
             }
         });
-
-        // Note: Backup/DeleteProject were in original monolithic, migrating here or
-        // leaving?
-        // User asked to "split", so migrating is best. But they are complex
-        // project-aware commands.
-        // Let's create ProjectHandler for them.
 
     }
 }

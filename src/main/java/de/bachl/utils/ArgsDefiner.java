@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.utils;
 
 import java.io.File;
@@ -37,7 +42,6 @@ public class ArgsDefiner {
             System.exit(0);
         }
 
-        // Delegate other commands
         new de.bachl.services.CommandService(args).handle();
     }
 }

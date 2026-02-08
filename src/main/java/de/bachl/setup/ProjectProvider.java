@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.setup;
 
 import java.io.File;
@@ -36,9 +41,8 @@ public class ProjectProvider {
             Log.info("Do you need a backend? (y/n)");
             String needbackend = scanner.nextLine();
 
-            String backendpath = ""; // Legacy/compatible path
+            String backendpath = "";
 
-            // Backend Configuration Variables
             String backendBuildCommand = "";
             String backendArtifactPath = "";
             String backendDeployPath = "";
@@ -48,7 +52,7 @@ public class ProjectProvider {
             String backendProxyTarget = "";
 
             if (needbackend.equals("y")) {
-                Log.info("--- Backend Configuration ---");
+                Log.info("--- Backend Deployment Configuration (Artifact & Systemd) ---");
 
                 Log.info("Enter backend local build command (e.g. 'mvn clean package') [Empty to skip]:");
                 backendBuildCommand = scanner.nextLine();
@@ -58,7 +62,7 @@ public class ProjectProvider {
 
                 Log.info("Enter remote path to deploy backend (e.g. '/var/www/backend'):");
                 backendDeployPath = scanner.nextLine();
-                // Use deploy path as the main backend path for consistency
+
                 backendpath = backendDeployPath;
 
                 Log.info("Enter command to run backend (e.g. 'java -jar app.jar'):");
@@ -69,14 +73,21 @@ public class ProjectProvider {
                 if (backendServiceName.trim().isEmpty()) {
                     backendServiceName = project + "-backend";
                 }
+            }
 
-                Log.info("Do you want to proxy requests to this backend? (y/n)");
+            Log.info("Do you want to configure an Nginx Reverse Proxy? (y/n)");
+            String backendFilePath = "";
+            if (scanner.nextLine().equalsIgnoreCase("y")) {
+                Log.info("Enter path to proxy (e.g. '/api' or '/' for root):");
+                backendProxyPath = scanner.nextLine();
+
+                Log.info("Enter target URL (e.g. 'http://localhost:8080'):");
+                backendProxyTarget = scanner.nextLine();
+
+                Log.info("Do you have a backend server file to deploy? (y/n)");
                 if (scanner.nextLine().equalsIgnoreCase("y")) {
-                    Log.info("Enter path to proxy (e.g. '/api'):");
-                    backendProxyPath = scanner.nextLine();
-
-                    Log.info("Enter target URL (e.g. 'http://localhost:8080'):");
-                    backendProxyTarget = scanner.nextLine();
+                    Log.info("Enter backend file path (e.g. server.cjs or server.js):");
+                    backendFilePath = scanner.nextLine();
                 }
             }
 
@@ -98,13 +109,18 @@ public class ProjectProvider {
                 uploadPath = "dist";
             }
 
-            // scanner.close(); // Do not close System.in
+            Log.info("Enter Nginx client_max_body_size (default: 10M, enter '500M' for large uploads):");
+            String clientMaxBodySize = scanner.nextLine();
+            if (clientMaxBodySize.trim().isEmpty()) {
+                clientMaxBodySize = "10M";
+            }
 
             ProjectConfig projectConfig = new ProjectConfig(server, project, needbackend.equals("y"), backendpath,
                     enableDomain.equalsIgnoreCase("y"),
                     domain, buildCommand, uploadPath,
                     backendBuildCommand, backendArtifactPath, backendDeployPath,
-                    backendRunCommand, backendServiceName, backendProxyPath, backendProxyTarget);
+                    backendRunCommand, backendServiceName, backendProxyPath, backendProxyTarget,
+                    clientMaxBodySize, backendFilePath);
 
             new ConfigProvider().setupProject(projectConfig);
         }

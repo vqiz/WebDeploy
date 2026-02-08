@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.services;
 
 import java.util.HashMap;
@@ -32,7 +37,7 @@ public class CommandService {
         new SystemHandler().register(registry);
         new SecurityHandler().register(registry);
         new WebHandler().register(registry);
-        new DevHandler().register(registry);
+
         new FileHandler().register(registry);
         new ProjectHandler().register(registry);
         new de.bachl.commands.handlers.DomainHandler().register(registry);
@@ -43,7 +48,6 @@ public class CommandService {
         try {
             ConfigProvider cp = new ConfigProvider();
 
-            // 1. Identify override server
             String overrideServer = null;
             if (args.containsKey("--ssh") && !args.get("--ssh").equals("true")) {
                 overrideServer = args.get("--ssh");
@@ -51,20 +55,18 @@ public class CommandService {
                 overrideServer = args.get("--server");
             }
 
-            // 2. Load Project Config (for context)
             this.projectConfig = cp.getProjectConfig();
 
-            // 3. Determine Server Config
             if (overrideServer != null) {
-                // Priority: CLI Argument
+                
                 this.config = cp.getServerConfig(overrideServer);
             } else if (this.projectConfig != null) {
-                // Fallback: Project Config
+                
                 this.config = cp.getServerConfig(this.projectConfig.getServername());
             }
 
         } catch (Exception e) {
-            // ConfigProvider handles exits for missing files
+            
         }
     }
 
@@ -80,7 +82,7 @@ public class CommandService {
 
     public void handle() {
         try {
-            // Priority Local Commands
+            
             if (args.containsKey("--version")) {
                 System.out.println("WebDeploy v1.2.0");
                 return;
@@ -93,7 +95,7 @@ public class CommandService {
                 System.out.println("WebDeploy v1.2.0 - Mega Upgrade");
                 return;
             }
-            // Find matching command
+            
             Command found = null;
             String foundKey = null;
             for (String k : args.keySet()) {
@@ -106,7 +108,7 @@ public class CommandService {
 
             if (found != null) {
                 Session session = null;
-                // Skip session for self-test or independent commands
+                
                 if (!foundKey.equals("--self-test") && !foundKey.equals("--setupdomain")
                         && !foundKey.equals("--sftp")) {
                     session = getSession();
@@ -120,7 +122,7 @@ public class CommandService {
                     }
                 }
             } else {
-                // Interactive / Fallback Commands
+                
                 if (args.containsKey("--ssh")) {
                     handleInteractive("");
                     return;
@@ -148,12 +150,12 @@ public class CommandService {
     }
 
     private void handleInteractive(String cmd) throws Exception {
-        // Check if server name is provided as argument to --ssh
+        
         String serverArg = args.get("--ssh");
         Config effectiveConfig = this.config;
 
         if (serverArg != null && !serverArg.isEmpty() && !serverArg.equals("true")) {
-            // Try to load server config by name
+            
             try {
                 effectiveConfig = new ConfigProvider().getServerConfig(serverArg);
             } catch (Exception e) {

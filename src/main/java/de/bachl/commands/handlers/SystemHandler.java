@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.util.HashMap;
@@ -13,8 +18,6 @@ import de.bachl.utils.Log;
 public class SystemHandler {
 
     public void register(CommandRegistry registry) {
-
-        // --- System Ops ---
 
         registry.register(new Command() {
             public String getCommand() {
@@ -77,8 +80,6 @@ public class SystemHandler {
             }
         });
 
-        // --- Services ---
-
         registry.register(new Command() {
             public String getCommand() {
                 return "--service-start";
@@ -135,8 +136,6 @@ public class SystemHandler {
                 CommandUtils.sendCommand("sudo systemctl restart " + svc, session, true);
             }
         });
-
-        // --- Monitoring / Info ---
 
         registry.register(new Command() {
             public String getCommand() {
@@ -238,8 +237,6 @@ public class SystemHandler {
                 CommandUtils.sendCommand("df -h", session, true);
             }
         });
-
-        // --- Users ---
 
         registry.register(new Command() {
             public String getCommand() {

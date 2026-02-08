@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.io.File;
@@ -31,11 +36,6 @@ public class DomainHandler {
             }
 
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
-                // If session is null (no project config), establish connection interactively
-                // We also check if we are in a project (config != null) but session might be
-                // null if CommandService didn't connect.
-                // CommandService passes what it has.
-                // But for SetupDomain we skipped auto-connect.
 
                 if (session == null) {
                     session = connectInteractive(args);
@@ -46,13 +46,7 @@ public class DomainHandler {
                     return;
                 }
 
-                // Track if we own the session (if we created it, we should close it)
-                // But since 'session' is a local parameter, we can't easily flag it from
-                // outside.
-                // However, since CommandService passes null in this specific case (due to our
-                // skip logic),
-                // we know we own it.
-                boolean weCreatedSession = true; // Since session was null passed in.
+                boolean weCreatedSession = true; 
 
                 try {
                     Scanner scanner = new Scanner(System.in);
@@ -77,11 +71,10 @@ public class DomainHandler {
                         return;
                     }
 
-                    // Verify project exists on server
                     String checkPath = "/var/www/webdeploy/" + projectName;
                     Log.info("Verifying project at " + checkPath + "...");
                     try {
-                        // ls -d checkPath. If successful, it exists.
+                        
                         CommandUtils.sendCommand("ls -d " + checkPath, session, false);
                     } catch (Exception e) {
                         Log.error("Project directory not found on server: " + checkPath);
@@ -91,17 +84,14 @@ public class DomainHandler {
                         return;
                     }
 
-                    // Configure Nginx
                     Log.info("Configuring Nginx for domain: " + domain);
 
-                    // Use existing config if available to preserve backend settings
                     ProjectConfig domainConfig = (config != null) ? config : new ProjectConfig();
 
                     domainConfig.setProjectname(projectName);
                     domainConfig.setDomain(domain);
                     new NginxService().setupSite(session, domainConfig);
 
-                    // Setup SSL
                     Log.info("Setting up SSL with Certbot...");
                     new SSLService().installCertbot(session);
                     new SSLService().setupSSL(session, domain);
@@ -123,7 +113,6 @@ public class DomainHandler {
     private Session connectInteractive(HashMap<String, String> args) throws Exception {
         ConfigProvider cp = new ConfigProvider();
 
-        // Check for --server or --ssh argument
         String targetServer = null;
         if (args.containsKey("--server")) {
             targetServer = args.get("--server");
@@ -142,7 +131,6 @@ public class DomainHandler {
             }
         }
 
-        // Fallback to interactive
         File serverDir = new File(System.getProperty("user.home") + "/.webdeploy/servers/");
         if (!serverDir.exists() || serverDir.listFiles() == null || serverDir.listFiles().length == 0) {
             Log.error("No servers configured. Run --setup first.");
@@ -160,7 +148,6 @@ public class DomainHandler {
         System.out.println("Enter server name to connect to:");
         Scanner scanner = new Scanner(System.in);
         String selectedServer = scanner.nextLine().trim();
-        // Do NOT close scanner
 
         Config config = null;
         try {

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.setup;
 
 import com.jcraft.jsch.Session;
@@ -16,7 +21,6 @@ public class DeployService {
         ProjectConfig projectConfig = configProvider.getProjectConfig();
         Config config = configProvider.getServerConfig(projectConfig.getServername());
 
-        // Execute Build Command
         if (projectConfig.getBuildCommand() != null && !projectConfig.getBuildCommand().isEmpty()) {
             Log.info("Executing build command: " + projectConfig.getBuildCommand());
             try {
@@ -47,26 +51,24 @@ public class DeployService {
         try {
             Session session = connectSSH(config);
 
-            if (projectConfig.isEnabledomain() || (projectConfig.getBackendProxyPath() != null
-                    && !projectConfig.getBackendProxyPath().isEmpty())) {
-                String domain = projectConfig.getDomain();
-                if (domain == null || domain.isEmpty()) {
-                    domain = "_"; // Default server block
-                }
-                Log.info("Configuring Nginx for project: " + projectConfig.getProjectname());
-                // Ensure domain is set in config for NginxService to use
-                if (projectConfig.getDomain() == null || projectConfig.getDomain().isEmpty()) {
-                    projectConfig.setDomain(domain);
-                }
-                new de.bachl.services.NginxService().setupSite(session, projectConfig);
-            }
+            // Skip Nginx setup on deploy to prevent overwriting SSL config.
+            // Nginx is set up via --setupproject (initial) or --setupdomain.
+            // if (projectConfig.getDomain() == null || projectConfig.getDomain().isEmpty())
+            // {
+            // projectConfig.setDomain(domain);
+            // }
+            // new de.bachl.services.NginxService().setupSite(session, projectConfig);
 
             Log.info("Start command execution");
             sendCommand("", session);
 
-            // Backend Deployment
             if (projectConfig.isNeedsbackend()) {
                 deployBackend(session, projectConfig, config);
+            }
+
+            // Deploy Node.js backend if configured
+            if (projectConfig.getBackendFilePath() != null && !projectConfig.getBackendFilePath().isEmpty()) {
+                deployNodeBackend(session, projectConfig, config);
             }
 
         } catch (Exception e) {
@@ -79,7 +81,6 @@ public class DeployService {
     private void deployBackend(Session session, ProjectConfig projectConfig, Config serverConfig) {
         Log.info("--- Starting Backend Deployment ---");
 
-        // 1. Build Backend Locally
         String buildCmd = projectConfig.getBackendBuildCommand();
         if (buildCmd != null && !buildCmd.isEmpty()) {
             Log.info("Executing backend build: " + buildCmd);
@@ -98,7 +99,6 @@ public class DeployService {
             }
         }
 
-        // 2. Upload Artifact
         String artifactPath = projectConfig.getBackendArtifactPath();
         String remotePath = projectConfig.getBackendDeployPath();
 
@@ -108,7 +108,6 @@ public class DeployService {
                 com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
                 channelSftp.connect();
 
-                // Ensure remote directory exists
                 try {
                     channelSftp.mkdir(remotePath);
                 } catch (Exception e) {
@@ -130,21 +129,18 @@ public class DeployService {
             }
         }
 
-        // 3. Systemd Service
         String serviceName = projectConfig.getBackendServiceName();
         String runCmd = projectConfig.getBackendRunCommand();
 
         if (serviceName != null && !serviceName.isEmpty() && runCmd != null && !runCmd.isEmpty()) {
             Log.info("Configuring Systemd Service: " + serviceName);
 
-            // Generate Service File Content
-            // Assuming artifact is uploaded to remotePath. working dir = remotePath
             String serviceContent = "[Unit]\n" +
                     "Description=" + serviceName + " (WebDeploy)\n" +
                     "After=network.target\n" +
                     "\n" +
                     "[Service]\n" +
-                    "User=root\n" + // Configurable user? Defaulting to root as per current context
+                    "User=root\n" +
                     "WorkingDirectory=" + remotePath + "\n" +
                     "ExecStart=" + runCmd + "\n" +
                     "Restart=always\n" +
@@ -155,12 +151,10 @@ public class DeployService {
             String remoteServiceFile = "/etc/systemd/system/" + serviceName + ".service";
 
             try {
-                // Upload service file
-                // Using echo/tee to write file
+
                 String writeCmd = "echo '" + serviceContent + "' | sudo tee " + remoteServiceFile;
                 sendCommand(writeCmd, session);
 
-                // Enable and Restart
                 sendCommand("sudo systemctl daemon-reload", session);
                 sendCommand("sudo systemctl enable " + serviceName, session);
                 sendCommand("sudo systemctl restart " + serviceName, session);
@@ -169,6 +163,73 @@ public class DeployService {
             } catch (Exception e) {
                 Log.error("Failed to configure backend service: " + e.getMessage());
             }
+        }
+    }
+
+    private void deployNodeBackend(Session session, ProjectConfig projectConfig, Config serverConfig) {
+        Log.info("--- Starting Node.js Backend Deployment ---");
+
+        String backendFilePath = projectConfig.getBackendFilePath();
+        java.io.File backendFile = new java.io.File(backendFilePath);
+
+        if (!backendFile.exists()) {
+            Log.error("Backend file not found: " + backendFilePath);
+            return;
+        }
+
+        String projectRoot = "/var/www/html/" + projectConfig.getProjectname();
+        String backendFileName = backendFile.getName();
+
+        try {
+            // 1. Check and install Node.js if needed
+            Log.info("Checking for Node.js installation...");
+            try {
+                sendCommand("which node", session);
+                Log.info("Node.js is already installed.");
+            } catch (Exception e) {
+                Log.info("Node.js not found. Installing Node.js 20.x...");
+                sendCommand("curl -fsSL https://deb.nodesource.com/setup_20.x | bash -", session);
+                sendCommand("apt-get install -y nodejs", session);
+                Log.info("Node.js installation complete.");
+            }
+
+            // 2. Upload backend file
+            Log.info("Uploading backend file: " + backendFileName);
+            com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
+            channelSftp.connect();
+
+            channelSftp.put(new java.io.FileInputStream(backendFile), projectRoot + "/" + backendFileName);
+
+            // 3. Check and upload package.json if exists
+            java.io.File packageJson = new java.io.File(backendFile.getParent(), "package.json");
+            if (packageJson.exists()) {
+                Log.info("Uploading package.json...");
+                channelSftp.put(new java.io.FileInputStream(packageJson), projectRoot + "/package.json");
+
+                channelSftp.disconnect();
+
+                // 4. Install npm dependencies
+                Log.info("Installing npm dependencies...");
+                sendCommand("cd " + projectRoot + " && npm install --production", session);
+            } else {
+                channelSftp.disconnect();
+            }
+
+            // 5. Kill existing process and start new one
+            Log.info("Starting backend service...");
+            String killCmd = "pkill -f 'node.*" + backendFileName + "' || true";
+            sendCommand(killCmd, session);
+
+            String startCmd = "cd " + projectRoot + " && nohup node " + backendFileName +
+                    " > /var/log/" + projectConfig.getProjectname() + "-api.log 2>&1 &";
+            sendCommand(startCmd, session);
+
+            // 6. Verify it started
+            Thread.sleep(2000);
+            Log.info("Backend service started successfully.");
+
+        } catch (Exception e) {
+            Log.error("Failed to deploy Node.js backend: " + e.getMessage());
         }
     }
 
@@ -232,9 +293,8 @@ public class DeployService {
             String releaseName = String.valueOf(System.currentTimeMillis());
             String releasePath = storageBase + "/releases/" + releaseName;
             String currentLink = storageBase + "/current";
-            String publicLink = remotePath; // /var/www/html/projectname
+            String publicLink = remotePath;
 
-            // Ensure storage directories exist
             sendCommand("mkdir -p " + releasePath, session);
 
             com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
@@ -246,41 +306,25 @@ public class DeployService {
 
             channelSftp.disconnect();
 
-            // Update internal 'current' symlink
             Log.info("Updating internal current link...");
-            // Ensure storageBase exists? mkdir -p releasePath creates it.
+
             sendCommand("ln -sfn " + releasePath + " " + currentLink, session);
 
-            // Update public symlink /var/www/html/projectname ->
-            // /var/www/webdeploy/projectname/current
             Log.info("Updating public access link...");
-            // Check if publicLink exists and is a directory (not a symlink)
-            // If so, move it away (legacy migration)
+
             String checkCmd = "if [ -d \"" + publicLink + "\" ] && [ ! -L \"" + publicLink + "\" ]; then mv \""
                     + publicLink + "\" \"" + publicLink + "_backup_" + releaseName + "\"; fi";
             sendCommand(checkCmd, session);
 
-            // Create/Update the public symlink
             sendCommand("ln -sfn " + currentLink + " " + publicLink, session);
 
             Log.info("Start SSH connection for command execution");
 
-            // Cleanup old releases (Keep current + 1 previous = 2 latest)
             Log.info("Cleaning up old releases...");
             String listCmd = "ls -1t " + storageBase + "/releases/";
-            // Using separate channel/method or incorporating output reading.
-            // Since we are in 'connect' which uses a generic session, we can use
-            // runCommandWithOutput logic if available or implement ad-hoc.
-            // Simpler approach: usage of complex Shell command to keep tail.
-            // ls -t | tail -n +3 | xargs -I {} rm -rf releases/{}
-            // Be careful with paths.
-            // Command: cd storageBase/releases && ls -t | tail -n +3 | xargs -I {} rm -rf
-            // {}
+
             String cleanupCmd = "cd " + storageBase + "/releases && ls -1t | tail -n +3 | xargs -I {} rm -rf {}";
-            // Check if there are enough releases first to avoid error? xargs handles empty
-            // input usually gracefully or we can ignore error.
-            // "tail -n +3" outputs lines starting from line 3. If only 1 or 2 lines, output
-            // is empty. xargs with empty input does nothing.
+
             sendCommand(cleanupCmd, session);
             Log.info("Cleanup completed.");
 
@@ -310,8 +354,7 @@ public class DeployService {
             java.io.File[] files = localFile.listFiles();
             if (files != null) {
                 for (java.io.File file : files) {
-                    if (file.getName().equals(".git") || file.getName().equals("node_modules")
-                            || file.getName().equals("build")) {
+                    if (file.getName().equals(".git") || file.getName().equals("build")) {
                         continue;
                     }
                     Log.info("Uploading " + file.getName());
@@ -322,7 +365,7 @@ public class DeployService {
         } else {
             try {
                 sftp.put(new java.io.FileInputStream(localFile), remotePath);
-                System.out.print("."); // Progress indicator
+                System.out.print(".");
             } catch (java.io.FileNotFoundException e) {
                 Log.error("File not found locally: " + localFile.getAbsolutePath());
             }

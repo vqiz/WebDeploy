@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.setup;
 
 import java.util.HashMap;
@@ -42,20 +47,16 @@ public class SetupProvider {
             session.setConfig("StrictHostKeyChecking", "no");
             session.connect();
 
-            // setup Config
             Log.info("Enter server name: ");
             java.util.Scanner scanner = new java.util.Scanner(System.in);
             String serverName = scanner.nextLine();
             scanner.close();
 
-            // setup nginx
             new de.bachl.services.NginxService().install(session);
 
-            // setup auth
             Log.info("setting up auth");
             String keypath = setupAuth(session, serverName);
 
-            // setup config
             Log.info("setting up config");
             Config config = new Config(keypath, serverName, this.host, this.user, this.password);
             new ConfigProvider().setupServer(config);
@@ -125,7 +126,6 @@ public class SetupProvider {
         kpair.writePrivateKey(keyPath);
         kpair.writePublicKey(keyPath + ".pub", "webdeploy-auto-generated");
 
-        // Fix permissions for private key
         try {
             new ProcessBuilder("chmod", "600", keyPath).start().waitFor();
         } catch (Exception e) {
@@ -143,7 +143,6 @@ public class SetupProvider {
         sendCommand("echo '" + publicKey + "' >> ~/.ssh/authorized_keys", session);
         sendCommand("chmod 600 ~/.ssh/authorized_keys", session);
 
-        // Backup config first (kept for safety context)
         sendCommand("sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak", session);
         sendCommand("sudo sed -i 's/^.*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
                 session);
@@ -156,7 +155,7 @@ public class SetupProvider {
                 sendCommand("sudo systemctl restart ssh", session);
                 Log.info("SSH configuration updated and service restarted.");
             } catch (Exception e) {
-                // Fallback for distros where service is named sshd (like CentOS/RHEL)
+                
                 try {
                     sendCommand("sudo systemctl restart sshd", session);
                     Log.info("SSH configuration updated and service restarted (via sshd).");

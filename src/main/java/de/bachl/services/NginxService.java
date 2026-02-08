@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.services;
 
 import com.jcraft.jsch.Session;
@@ -21,7 +26,6 @@ public class NginxService {
 
         Log.info("Setting up Nginx for project: " + projectName);
 
-        // Define the config content
         String configContent = "server {\n" +
                 "    listen 80;\n" +
                 "    server_name " + domain + ";\n" +
@@ -29,19 +33,29 @@ public class NginxService {
                 "    root /var/www/html/" + projectName + ";\n" +
                 "    index index.html index.htm;\n" +
                 "\n" +
+                "    client_max_body_size "
+                + (config.getClientMaxBodySize() != null ? config.getClientMaxBodySize() : "10M") + ";\n" +
+                "\n" +
                 "    if (-f $document_root/maintenance.html) {\n" +
                 "        return 503;\n" +
                 "    }\n" +
                 "    error_page 503 @maintenance;\n" +
                 "    location @maintenance {\n" +
                 "        rewrite ^(.*)$ /maintenance.html break;\n" +
-                "    }\n" +
-                "\n" +
-                "    location / {\n" +
-                "        try_files $uri $uri/ =404;\n" +
                 "    }\n";
 
-        // Proxy Configuration
+        boolean rootProxied = false;
+        if (config.getBackendProxyPath() != null && config.getBackendProxyPath().equals("/")) {
+            rootProxied = true;
+        }
+
+        if (!rootProxied) {
+            configContent += "\n" +
+                    "    location / {\n" +
+                    "        try_files $uri $uri/ /index.html;\n" +
+                    "    }\n";
+        }
+
         if (config.getBackendProxyPath() != null && !config.getBackendProxyPath().isEmpty() &&
                 config.getBackendProxyTarget() != null && !config.getBackendProxyTarget().isEmpty()) {
 
@@ -57,18 +71,15 @@ public class NginxService {
 
         configContent += "}";
 
-        // Write the config file
         String remoteConfigPath = "/etc/nginx/sites-available/" + projectName;
         String echoCommand = "echo '" + configContent + "' | sudo tee " + remoteConfigPath;
         sendCommand(echoCommand, session);
 
-        // Enable the site (symlink)
         String linkCommand = "sudo ln -s " + remoteConfigPath + " /etc/nginx/sites-enabled/";
-        // Check if link exists first to avoid error or force it
+
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/" + projectName, session);
         sendCommand(linkCommand, session);
 
-        // Remove default if it exists and clutters (optional)
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/default", session);
 
         reload(session);

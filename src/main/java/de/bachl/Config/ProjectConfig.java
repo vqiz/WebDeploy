@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.Config;
 
 public class ProjectConfig {
@@ -19,6 +24,8 @@ public class ProjectConfig {
     private String backendServiceName;
     private String backendProxyPath;
     private String backendProxyTarget;
+    private String clientMaxBodySize;
+    private String backendFilePath;
 
     public ProjectConfig() {
     }
@@ -26,7 +33,8 @@ public class ProjectConfig {
     public ProjectConfig(String servername, String projectname, boolean needsbackend, String backendpath,
             boolean enabledomain, String domain, String buildCommand, String uploadPath,
             String backendBuildCommand, String backendArtifactPath, String backendDeployPath,
-            String backendRunCommand, String backendServiceName, String backendProxyPath, String backendProxyTarget) {
+            String backendRunCommand, String backendServiceName, String backendProxyPath, String backendProxyTarget,
+            String clientMaxBodySize, String backendFilePath) {
         this.servername = servername;
         this.projectname = projectname;
         this.needsbackend = needsbackend;
@@ -42,9 +50,9 @@ public class ProjectConfig {
         this.backendServiceName = backendServiceName;
         this.backendProxyPath = backendProxyPath;
         this.backendProxyTarget = backendProxyTarget;
+        this.clientMaxBodySize = clientMaxBodySize;
+        this.backendFilePath = backendFilePath;
     }
-
-    // Getters and Setters
 
     public String getBackendBuildCommand() {
         return backendBuildCommand;
@@ -164,5 +172,21 @@ public class ProjectConfig {
 
     public void setUploadPath(String uploadPath) {
         this.uploadPath = uploadPath;
+    }
+
+    public String getClientMaxBodySize() {
+        return clientMaxBodySize;
+    }
+
+    public void setClientMaxBodySize(String clientMaxBodySize) {
+        this.clientMaxBodySize = clientMaxBodySize;
+    }
+
+    public String getBackendFilePath() {
+        return backendFilePath;
+    }
+
+    public void setBackendFilePath(String backendFilePath) {
+        this.backendFilePath = backendFilePath;
     }
 }

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
+ * All rights reserved.
+ */
+
 package de.bachl.commands.handlers;
 
 import java.util.HashMap;
@@ -56,8 +61,6 @@ public class WebHandler {
             }
         });
 
-        // --- New Phase 2 --
-
         registry.register(new Command() {
             public String getCommand() {
                 return "--access-logs";
@@ -98,7 +101,7 @@ public class WebHandler {
             public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
                 CommandUtils.sendCommand("sudo systemctl reload nginx", session, true);
                 if (config != null) {
-                    // Generic attempt
+
                     String path = "/var/www/html/" + config.getProjectname();
                     CommandUtils.sendCommand("cd " + path + " && (php artisan optimize:clear || true)", session, true);
                 }
@@ -120,10 +123,9 @@ public class WebHandler {
                     return;
                 }
                 String path = "/var/www/html/" + config.getProjectname() + "/maintenance.html";
-                // Check if exists
+
                 boolean exists = false;
                 try {
-                    // Simple check: ls path. If exit code 0, it exists.
                     CommandUtils.sendCommand("ls " + path, session, false);
                     exists = true;
                 } catch (Exception e) {
@@ -137,6 +139,36 @@ public class WebHandler {
                     Log.info("Enabling maintenance mode...");
                     CommandUtils.sendCommand("echo '<h1>Maintenance Mode</h1>' > " + path, session, true);
                 }
+            }
+        });
+
+        registry.register(new Command() {
+            public String getCommand() {
+                return "--max-body-size";
+            }
+
+            public String getDescription() {
+                return "Set Nginx client_max_body_size (usage: --max-body-size 500M).";
+            }
+
+            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
+                if (config == null) {
+                    Log.error("Project config required.");
+                    return;
+                }
+                String size = args.get("--max-body-size");
+                if (size == null || size.equals("true") || size.isEmpty()) {
+                    Log.error("Please specify size (e.g. 500M).");
+                    return;
+                }
+
+                config.setClientMaxBodySize(size);
+                new de.bachl.Config.ConfigProvider().setupProject(config);
+                Log.info("Updated project config with client_max_body_size: " + size);
+
+                Log.info("Applying Nginx configuration...");
+                new de.bachl.services.NginxService().setupSite(session, config);
+                Log.info("Nginx configuration updated.");
             }
         });
     }
