@@ -89,6 +89,24 @@ Revert to the previous release if bugs are found.
 webdeploy --rollback
 ```
 *Instantly points the `current` symlink to the previous working release.*
+### 6. Backend Deployment (Java/Node.js) ⚙️
+Deploy backend services alongside your frontend.
+1. Run `webdeploy --setupproject` and answer "Y" to **"Do you need a backend?"**.
+2. Provide details:
+    - **Build Command**: e.g., `mvn clean package`.
+    - **Artifact Path**: e.g., `target/app.jar`.
+    - **Run Command**: e.g., `/usr/bin/java -jar app.jar`.
+    - **Service Name**: Name for the systemd service.
+    - **Proxy**: Map an endpoint (e.g., `/api`) to your backend port (e.g., `3000`).
+3. Run `webdeploy --deploy`.
+*Your backend will be built, uploaded, and automatically managed as a systemd service.*
+
+### 7. Domain & SSL Setup 🔒
+Configure a custom domain with HTTPS in seconds.
+```bash
+webdeploy --setupdomain
+```
+*Prompts for domain and project name. Automatically installs Certbot, gets a certificate, and configures Nginx.*
 
 ---
 
@@ -114,7 +132,15 @@ Your project configuration is stored in `webdeploy.config`.
 | `enabledomain` | `true` to configure Nginx for a domain, `false` for IP only. |
 | `domain` | The domain name (e.g., `example.com`). |
 | `buildCommand` | **(New)** Bash command to run locally before upload. |
-| `uploadPath` | **(New)** Local directory to upload (relative to project root). |
+| `buildCommand` | Bash command to run locally before upload. |
+| `uploadPath` | Local directory to upload (relative to project root). |
+| `backendBuildCommand` | Command to build backend locally. |
+| `backendArtifactPath` | Local path to build artifact (e.g. `target/app.jar`). |
+| `backendDeployPath` | Remote directory for backend files. |
+| `backendRunCommand` | Command to run the application (systemd). |
+| `backendServiceName` | Name for the systemd service. |
+| `backendProxyPath` | Nginx location path (e.g. `/api`). |
+| `backendProxyTarget` | Internal URL (e.g. `http://localhost:3000`). |
 
 ---
 
@@ -134,6 +160,7 @@ Your project configuration is stored in `webdeploy.config`.
 | `--diskspace` | Show available disk space. |
 | `--sftp` | Open SFTP session in new Terminal (Mac only). |
 | `--setupdomain` | Configure a domain and SSL for an existing project. |
+| `--setupdomain` | Configure domain and SSL for the current project. |
 | `--help` | Show all available commands. |
 
 ---
