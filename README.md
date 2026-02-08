@@ -177,4 +177,4 @@ Your project configuration is stored in `webdeploy.config`.
 - Ensure `~/.webdeploy/bin` is in your `$PATH`.
 
 ---
-*Built with ❤️ by the Google DeepMind Team*
+
