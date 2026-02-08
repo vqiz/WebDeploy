@@ -9,14 +9,24 @@ public class ProjectConfig {
     private boolean enabledomain;
     private String domain;
 
-    public ProjectConfig() {
-    }
-
     private String buildCommand;
     private String uploadPath;
 
+    private String backendBuildCommand;
+    private String backendArtifactPath;
+    private String backendDeployPath;
+    private String backendRunCommand;
+    private String backendServiceName;
+    private String backendProxyPath;
+    private String backendProxyTarget;
+
+    public ProjectConfig() {
+    }
+
     public ProjectConfig(String servername, String projectname, boolean needsbackend, String backendpath,
-            boolean enabledomain, String domain, String buildCommand, String uploadPath) {
+            boolean enabledomain, String domain, String buildCommand, String uploadPath,
+            String backendBuildCommand, String backendArtifactPath, String backendDeployPath,
+            String backendRunCommand, String backendServiceName, String backendProxyPath, String backendProxyTarget) {
         this.servername = servername;
         this.projectname = projectname;
         this.needsbackend = needsbackend;
@@ -25,6 +35,71 @@ public class ProjectConfig {
         this.domain = domain;
         this.buildCommand = buildCommand;
         this.uploadPath = uploadPath;
+        this.backendBuildCommand = backendBuildCommand;
+        this.backendArtifactPath = backendArtifactPath;
+        this.backendDeployPath = backendDeployPath;
+        this.backendRunCommand = backendRunCommand;
+        this.backendServiceName = backendServiceName;
+        this.backendProxyPath = backendProxyPath;
+        this.backendProxyTarget = backendProxyTarget;
+    }
+
+    // Getters and Setters
+
+    public String getBackendBuildCommand() {
+        return backendBuildCommand;
+    }
+
+    public void setBackendBuildCommand(String backendBuildCommand) {
+        this.backendBuildCommand = backendBuildCommand;
+    }
+
+    public String getBackendArtifactPath() {
+        return backendArtifactPath;
+    }
+
+    public void setBackendArtifactPath(String backendArtifactPath) {
+        this.backendArtifactPath = backendArtifactPath;
+    }
+
+    public String getBackendDeployPath() {
+        return backendDeployPath;
+    }
+
+    public void setBackendDeployPath(String backendDeployPath) {
+        this.backendDeployPath = backendDeployPath;
+    }
+
+    public String getBackendRunCommand() {
+        return backendRunCommand;
+    }
+
+    public void setBackendRunCommand(String backendRunCommand) {
+        this.backendRunCommand = backendRunCommand;
+    }
+
+    public String getBackendServiceName() {
+        return backendServiceName;
+    }
+
+    public void setBackendServiceName(String backendServiceName) {
+        this.backendServiceName = backendServiceName;
+    }
+
+    public String getBackendProxyPath() {
+        return backendProxyPath;
+    }
+
+    public void setBackendProxyPath(String backendProxyPath) {
+        this.backendProxyPath = backendProxyPath;
+    }
+
+    public String getBackendProxyTarget() {
+        return backendProxyTarget;
+    }
+
+    public void setBackendProxyTarget(String backendProxyTarget) {
+        this.backendProxyTarget = backendProxyTarget;
     }
 
     public String getServername() {

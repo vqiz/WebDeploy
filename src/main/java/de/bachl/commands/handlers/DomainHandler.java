@@ -93,8 +93,13 @@ public class DomainHandler {
 
                     // Configure Nginx
                     Log.info("Configuring Nginx for domain: " + domain);
-                    // Port 80 for initial setup
-                    new NginxService().setupSite(session, projectName, domain, 80);
+
+                    // Use existing config if available to preserve backend settings
+                    ProjectConfig domainConfig = (config != null) ? config : new ProjectConfig();
+
+                    domainConfig.setProjectname(projectName);
+                    domainConfig.setDomain(domain);
+                    new NginxService().setupSite(session, domainConfig);
 
                     // Setup SSL
                     Log.info("Setting up SSL with Certbot...");

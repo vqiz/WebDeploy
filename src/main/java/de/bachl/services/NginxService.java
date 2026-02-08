@@ -2,6 +2,7 @@ package de.bachl.services;
 
 import com.jcraft.jsch.Session;
 import de.bachl.utils.Log;
+import de.bachl.Config.ProjectConfig;
 
 public class NginxService {
 
@@ -14,11 +15,14 @@ public class NginxService {
         sendCommand("sudo systemctl enable nginx", session);
     }
 
-    public void setupSite(Session session, String projectName, String domain, int port) throws Exception {
+    public void setupSite(Session session, ProjectConfig config) throws Exception {
+        String projectName = config.getProjectname();
+        String domain = config.getDomain();
+
         Log.info("Setting up Nginx for project: " + projectName);
 
         // Define the config content
-        String config = "server {\n" +
+        String configContent = "server {\n" +
                 "    listen 80;\n" +
                 "    server_name " + domain + ";\n" +
                 "\n" +
@@ -35,12 +39,27 @@ public class NginxService {
                 "\n" +
                 "    location / {\n" +
                 "        try_files $uri $uri/ =404;\n" +
-                "    }\n" +
-                "}";
+                "    }\n";
+
+        // Proxy Configuration
+        if (config.getBackendProxyPath() != null && !config.getBackendProxyPath().isEmpty() &&
+                config.getBackendProxyTarget() != null && !config.getBackendProxyTarget().isEmpty()) {
+
+            configContent += "\n" +
+                    "    location " + config.getBackendProxyPath() + " {\n" +
+                    "        proxy_pass " + config.getBackendProxyTarget() + ";\n" +
+                    "        proxy_set_header Host $host;\n" +
+                    "        proxy_set_header X-Real-IP $remote_addr;\n" +
+                    "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n" +
+                    "        proxy_set_header X-Forwarded-Proto $scheme;\n" +
+                    "    }\n";
+        }
+
+        configContent += "}";
 
         // Write the config file
         String remoteConfigPath = "/etc/nginx/sites-available/" + projectName;
-        String echoCommand = "echo '" + config + "' | sudo tee " + remoteConfigPath;
+        String echoCommand = "echo '" + configContent + "' | sudo tee " + remoteConfigPath;
         sendCommand(echoCommand, session);
 
         // Enable the site (symlink)
@@ -49,9 +68,8 @@ public class NginxService {
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/" + projectName, session);
         sendCommand(linkCommand, session);
 
-        // Remove default if it exists and clutters (optional, but good for single site
-        // setup if wanted)
-        // sendCommand("sudo rm -f /etc/nginx/sites-enabled/default", session);
+        // Remove default if it exists and clutters (optional)
+        sendCommand("sudo rm -f /etc/nginx/sites-enabled/default", session);
 
         reload(session);
     }

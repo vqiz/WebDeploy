@@ -47,19 +47,129 @@ public class DeployService {
         try {
             Session session = connectSSH(config);
 
-            if (projectConfig.isEnabledomain()) {
-                Log.info("Configuring Nginx for domain: " + projectConfig.getDomain());
-                new de.bachl.services.NginxService().setupSite(session, projectConfig.getProjectname(),
-                        projectConfig.getDomain(), 80);
+            if (projectConfig.isEnabledomain() || (projectConfig.getBackendProxyPath() != null
+                    && !projectConfig.getBackendProxyPath().isEmpty())) {
+                String domain = projectConfig.getDomain();
+                if (domain == null || domain.isEmpty()) {
+                    domain = "_"; // Default server block
+                }
+                Log.info("Configuring Nginx for project: " + projectConfig.getProjectname());
+                // Ensure domain is set in config for NginxService to use
+                if (projectConfig.getDomain() == null || projectConfig.getDomain().isEmpty()) {
+                    projectConfig.setDomain(domain);
+                }
+                new de.bachl.services.NginxService().setupSite(session, projectConfig);
             }
 
             Log.info("Start command execution");
             sendCommand("", session);
+
+            // Backend Deployment
+            if (projectConfig.isNeedsbackend()) {
+                deployBackend(session, projectConfig, config);
+            }
+
         } catch (Exception e) {
             Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
             System.exit(1);
         }
 
+    }
+
+    private void deployBackend(Session session, ProjectConfig projectConfig, Config serverConfig) {
+        Log.info("--- Starting Backend Deployment ---");
+
+        // 1. Build Backend Locally
+        String buildCmd = projectConfig.getBackendBuildCommand();
+        if (buildCmd != null && !buildCmd.isEmpty()) {
+            Log.info("Executing backend build: " + buildCmd);
+            try {
+                ProcessBuilder pb = new ProcessBuilder("bash", "-c", buildCmd);
+                pb.inheritIO();
+                Process p = pb.start();
+                int exitCode = p.waitFor();
+                if (exitCode != 0) {
+                    Log.error("Backend build failed. Exit code: " + exitCode);
+                    System.exit(1);
+                }
+            } catch (Exception e) {
+                Log.error("Backend build failed: " + e.getMessage());
+                System.exit(1);
+            }
+        }
+
+        // 2. Upload Artifact
+        String artifactPath = projectConfig.getBackendArtifactPath();
+        String remotePath = projectConfig.getBackendDeployPath();
+
+        if (artifactPath != null && !artifactPath.isEmpty() && remotePath != null && !remotePath.isEmpty()) {
+            Log.info("Uploading backend artifact from " + artifactPath + " to " + remotePath);
+            try {
+                com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
+                channelSftp.connect();
+
+                // Ensure remote directory exists
+                try {
+                    channelSftp.mkdir(remotePath);
+                } catch (Exception e) {
+                    /* Ignore if exists */ }
+
+                java.io.File localArtifact = new java.io.File(artifactPath);
+                if (localArtifact.isDirectory()) {
+                    recursiveUpload(channelSftp, localArtifact, remotePath);
+                } else {
+                    channelSftp.put(new java.io.FileInputStream(localArtifact),
+                            remotePath + "/" + localArtifact.getName());
+                }
+
+                channelSftp.disconnect();
+                Log.info("Backend upload complete.");
+            } catch (Exception e) {
+                Log.error("Backend upload failed: " + e.getMessage());
+                System.exit(1);
+            }
+        }
+
+        // 3. Systemd Service
+        String serviceName = projectConfig.getBackendServiceName();
+        String runCmd = projectConfig.getBackendRunCommand();
+
+        if (serviceName != null && !serviceName.isEmpty() && runCmd != null && !runCmd.isEmpty()) {
+            Log.info("Configuring Systemd Service: " + serviceName);
+
+            // Generate Service File Content
+            // Assuming artifact is uploaded to remotePath. working dir = remotePath
+            String serviceContent = "[Unit]\n" +
+                    "Description=" + serviceName + " (WebDeploy)\n" +
+                    "After=network.target\n" +
+                    "\n" +
+                    "[Service]\n" +
+                    "User=root\n" + // Configurable user? Defaulting to root as per current context
+                    "WorkingDirectory=" + remotePath + "\n" +
+                    "ExecStart=" + runCmd + "\n" +
+                    "Restart=always\n" +
+                    "\n" +
+                    "[Install]\n" +
+                    "WantedBy=multi-user.target\n";
+
+            String remoteServiceFile = "/etc/systemd/system/" + serviceName + ".service";
+
+            try {
+                // Upload service file
+                // Using echo/tee to write file
+                String writeCmd = "echo '" + serviceContent + "' | sudo tee " + remoteServiceFile;
+                sendCommand(writeCmd, session);
+
+                // Enable and Restart
+                sendCommand("sudo systemctl daemon-reload", session);
+                sendCommand("sudo systemctl enable " + serviceName, session);
+                sendCommand("sudo systemctl restart " + serviceName, session);
+
+                Log.info("Backend service restarted.");
+            } catch (Exception e) {
+                Log.error("Failed to configure backend service: " + e.getMessage());
+            }
+        }
     }
 
     public com.jcraft.jsch.Session connectSSH(Config config) throws com.jcraft.jsch.JSchException {

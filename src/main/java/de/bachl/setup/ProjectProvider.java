@@ -36,10 +36,48 @@ public class ProjectProvider {
             Log.info("Do you need a backend? (y/n)");
             String needbackend = scanner.nextLine();
 
-            String backendpath = "";
+            String backendpath = ""; // Legacy/compatible path
+
+            // Backend Configuration Variables
+            String backendBuildCommand = "";
+            String backendArtifactPath = "";
+            String backendDeployPath = "";
+            String backendRunCommand = "";
+            String backendServiceName = "";
+            String backendProxyPath = "";
+            String backendProxyTarget = "";
+
             if (needbackend.equals("y")) {
-                Log.info("Please enter a backend path:");
-                backendpath = scanner.nextLine();
+                Log.info("--- Backend Configuration ---");
+
+                Log.info("Enter backend local build command (e.g. 'mvn clean package') [Empty to skip]:");
+                backendBuildCommand = scanner.nextLine();
+
+                Log.info("Enter local path to backend artifact (e.g. 'target/app.jar'):");
+                backendArtifactPath = scanner.nextLine();
+
+                Log.info("Enter remote path to deploy backend (e.g. '/var/www/backend'):");
+                backendDeployPath = scanner.nextLine();
+                // Use deploy path as the main backend path for consistency
+                backendpath = backendDeployPath;
+
+                Log.info("Enter command to run backend (e.g. 'java -jar app.jar'):");
+                backendRunCommand = scanner.nextLine();
+
+                Log.info("Enter systemd service name (default: " + project + "-backend):");
+                backendServiceName = scanner.nextLine();
+                if (backendServiceName.trim().isEmpty()) {
+                    backendServiceName = project + "-backend";
+                }
+
+                Log.info("Do you want to proxy requests to this backend? (y/n)");
+                if (scanner.nextLine().equalsIgnoreCase("y")) {
+                    Log.info("Enter path to proxy (e.g. '/api'):");
+                    backendProxyPath = scanner.nextLine();
+
+                    Log.info("Enter target URL (e.g. 'http://localhost:8080'):");
+                    backendProxyTarget = scanner.nextLine();
+                }
             }
 
             Log.info("Do you want to configure a domain? (y/n)");
@@ -51,10 +89,10 @@ public class ProjectProvider {
                 domain = scanner.nextLine();
             }
 
-            Log.info("Enter build command (leave empty to skip):");
+            Log.info("Enter frontend build command (leave empty to skip):");
             String buildCommand = scanner.nextLine();
 
-            Log.info("Enter local folder to upload (default: dist):");
+            Log.info("Enter local frontend folder to upload (default: dist):");
             String uploadPath = scanner.nextLine();
             if (uploadPath.trim().isEmpty()) {
                 uploadPath = "dist";
@@ -64,7 +102,9 @@ public class ProjectProvider {
 
             ProjectConfig projectConfig = new ProjectConfig(server, project, needbackend.equals("y"), backendpath,
                     enableDomain.equalsIgnoreCase("y"),
-                    domain, buildCommand, uploadPath);
+                    domain, buildCommand, uploadPath,
+                    backendBuildCommand, backendArtifactPath, backendDeployPath,
+                    backendRunCommand, backendServiceName, backendProxyPath, backendProxyTarget);
 
             new ConfigProvider().setupProject(projectConfig);
         }
