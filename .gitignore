@@ -2,3 +2,5 @@
 /my-app
 /build_fat
 WebDeploy.jar
+/.gradle
+/build

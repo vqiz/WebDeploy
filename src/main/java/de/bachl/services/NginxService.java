@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.services;
 
@@ -28,7 +25,7 @@ public class NginxService {
 
         String configContent = "server {\n" +
                 "    listen 80;\n" +
-                "    server_name " + domain + ";\n" +
+                "    server_name " + (domain != null && !domain.isEmpty() ? domain : "_") + ";\n" +
                 "\n" +
                 "    root /var/www/html/" + projectName + ";\n" +
                 "    index index.html index.htm;\n" +
@@ -69,17 +66,23 @@ public class NginxService {
                     "    }\n";
         }
 
+        if (config.getNginxCustomBlock() != null && !config.getNginxCustomBlock().isEmpty()) {
+            configContent += "\n    " + config.getNginxCustomBlock() + "\n";
+        }
+
         configContent += "}";
 
         String remoteConfigPath = "/etc/nginx/sites-available/" + projectName;
-        String echoCommand = "echo '" + configContent + "' | sudo tee " + remoteConfigPath;
-        sendCommand(echoCommand, session);
+
+        // Use base64 encoding to safely write the config (avoids single-quote issues)
+        String b64 = java.util.Base64.getEncoder()
+                .encodeToString(configContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String writeCmd = "echo '" + b64 + "' | base64 -d | sudo tee " + remoteConfigPath + " > /dev/null";
+        sendCommand(writeCmd, session);
 
         String linkCommand = "sudo ln -s " + remoteConfigPath + " /etc/nginx/sites-enabled/";
-
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/" + projectName, session);
         sendCommand(linkCommand, session);
-
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/default", session);
 
         reload(session);

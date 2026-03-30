@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.Config;
 
@@ -26,6 +23,13 @@ public class ProjectConfig {
     private String backendProxyTarget;
     private String clientMaxBodySize;
     private String backendFilePath;
+
+    // New fields
+    private int keepReleases = 5;
+    private String preDeployCommand;
+    private String postDeployCommand;
+    private String healthCheckUrl;
+    private String nginxCustomBlock;
 
     public ProjectConfig() {
     }
@@ -52,6 +56,7 @@ public class ProjectConfig {
         this.backendProxyTarget = backendProxyTarget;
         this.clientMaxBodySize = clientMaxBodySize;
         this.backendFilePath = backendFilePath;
+        this.keepReleases = 5;
     }
 
     public String getBackendBuildCommand() {
@@ -188,5 +193,45 @@ public class ProjectConfig {
 
     public void setBackendFilePath(String backendFilePath) {
         this.backendFilePath = backendFilePath;
+    }
+
+    public int getKeepReleases() {
+        return keepReleases <= 0 ? 5 : keepReleases;
+    }
+
+    public void setKeepReleases(int keepReleases) {
+        this.keepReleases = keepReleases;
+    }
+
+    public String getPreDeployCommand() {
+        return preDeployCommand;
+    }
+
+    public void setPreDeployCommand(String preDeployCommand) {
+        this.preDeployCommand = preDeployCommand;
+    }
+
+    public String getPostDeployCommand() {
+        return postDeployCommand;
+    }
+
+    public void setPostDeployCommand(String postDeployCommand) {
+        this.postDeployCommand = postDeployCommand;
+    }
+
+    public String getHealthCheckUrl() {
+        return healthCheckUrl;
+    }
+
+    public void setHealthCheckUrl(String healthCheckUrl) {
+        this.healthCheckUrl = healthCheckUrl;
+    }
+
+    public String getNginxCustomBlock() {
+        return nginxCustomBlock;
+    }
+
+    public void setNginxCustomBlock(String nginxCustomBlock) {
+        this.nginxCustomBlock = nginxCustomBlock;
     }
 }

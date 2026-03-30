@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.setup;
 
@@ -19,6 +16,7 @@ public class SetupProvider {
     private String host;
     private String password;
     private String user = "root";
+    private int sshPort = 22;
 
     public SetupProvider(HashMap<String, String> args) {
         this.args = args;
@@ -27,12 +25,11 @@ public class SetupProvider {
     public void setup() {
         fetchdata();
         connect();
-
     }
 
     void connect() {
         String hostname = this.host;
-        int port = 22;
+        int port = this.sshPort;
 
         if (hostname.contains(":")) {
             String[] parts = hostname.split(":");
@@ -47,21 +44,38 @@ public class SetupProvider {
             session.setConfig("StrictHostKeyChecking", "no");
             session.connect();
 
-            Log.info("Enter server name: ");
             java.util.Scanner scanner = new java.util.Scanner(System.in);
-            String serverName = scanner.nextLine();
-            scanner.close();
+            Log.info("Enter server name: ");
+            String serverName = scanner.nextLine().trim();
 
             new de.bachl.services.NginxService().install(session);
 
-            Log.info("setting up auth");
+            Log.info("Setting up auth");
             String keypath = setupAuth(session, serverName);
 
-            Log.info("setting up config");
-            Config config = new Config(keypath, serverName, this.host, this.user, this.password);
+            Log.info("Setting up config");
+            Config config = new Config(keypath, serverName, this.host, this.user, this.password, port);
             new ConfigProvider().setupServer(config);
 
-            Log.info("Setup completed successfully");
+            // Ask about UFW
+            Log.info("Configure UFW firewall? (recommended) [y/n]:");
+            String ufwAnswer = scanner.nextLine().trim();
+            if (ufwAnswer.equalsIgnoreCase("y")) {
+                Log.info("Configuring UFW firewall...");
+                try {
+                    sendCommand("sudo ufw allow " + port, session);
+                    sendCommand("sudo ufw allow 80", session);
+                    sendCommand("sudo ufw allow 443", session);
+                    sendCommand("sudo ufw --force enable", session);
+                    Log.success("UFW configured and enabled.");
+                } catch (Exception e) {
+                    Log.warn("UFW configuration failed: " + e.getMessage());
+                }
+            }
+
+            scanner.close();
+
+            Log.success("Setup completed successfully");
             session.disconnect();
             Log.info("Disconnected from " + hostname);
 
@@ -69,7 +83,6 @@ public class SetupProvider {
             Log.error("Failed to establish SSH connection to " + hostname + ": " + e.getMessage());
             System.exit(1);
         }
-
     }
 
     void sendCommand(String command, Session session) throws Exception {
@@ -105,6 +118,14 @@ public class SetupProvider {
         }
         if (args.containsKey("--user")) {
             this.user = args.get("--user");
+        }
+        if (args.containsKey("--sshport")) {
+            try {
+                this.sshPort = Integer.parseInt(args.get("--sshport"));
+            } catch (NumberFormatException e) {
+                Log.warn("Invalid --sshport value, using default 22.");
+                this.sshPort = 22;
+            }
         }
         this.host = args.get("--host");
         this.password = args.get("--password");
@@ -155,7 +176,6 @@ public class SetupProvider {
                 sendCommand("sudo systemctl restart ssh", session);
                 Log.info("SSH configuration updated and service restarted.");
             } catch (Exception e) {
-                
                 try {
                     sendCommand("sudo systemctl restart sshd", session);
                     Log.info("SSH configuration updated and service restarted (via sshd).");

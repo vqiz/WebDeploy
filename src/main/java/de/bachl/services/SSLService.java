@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.services;
 
@@ -12,21 +9,17 @@ public class SSLService {
 
     public void installCertbot(Session session) throws Exception {
         Log.info("Installing Certbot...");
-        
         sendCommand("sudo apt-get update", session);
         sendCommand("sudo apt-get install -y snapd", session);
         sendCommand("sudo snap install core; sudo snap refresh core", session);
-
         sendCommand("sudo snap install --classic certbot", session);
         sendCommand("sudo ln -sf /snap/bin/certbot /usr/bin/certbot", session);
     }
 
     public void setupSSL(Session session, String domain) throws Exception {
         Log.info("Requesting SSL certificate for " + domain + "...");
-
         String command = "sudo certbot --nginx -d " + domain
                 + " --non-interactive --agree-tos --register-unsafely-without-email --redirect";
-
         sendCommand(command, session);
         Log.info("SSL setup complete for " + domain);
     }

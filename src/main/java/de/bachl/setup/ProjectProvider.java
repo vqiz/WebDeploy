@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.setup;
 
@@ -22,110 +19,144 @@ public class ProjectProvider {
     }
 
     public void setup() {
-        Log.info("Setting up project");
+        Log.info("=== WebDeploy Project Setup ===");
+
+        // Detect template
+        String template = args.getOrDefault("--template", "");
+
+        // Pre-fill defaults based on template
+        String defaultBuildCommand = "";
+        String defaultUploadPath = "dist";
+
+        switch (template.toLowerCase()) {
+            case "react":
+            case "vue":
+                defaultBuildCommand = "npm run build";
+                defaultUploadPath = "dist";
+                break;
+            case "node":
+                defaultBuildCommand = "";
+                defaultUploadPath = ".";
+                break;
+            case "spring":
+                defaultBuildCommand = "./gradlew build";
+                defaultUploadPath = "build/libs";
+                break;
+            case "static":
+                defaultBuildCommand = "";
+                defaultUploadPath = ".";
+                break;
+            default:
+                break;
+        }
+
         new ArgsLister().print();
 
         try (Scanner scanner = new Scanner(System.in)) {
 
-            Log.info("Please enter a server name:");
-            String server = scanner.nextLine();
+        Log.info("Server name:");
+        String server = scanner.nextLine().trim();
 
-            if (!new File(System.getProperty("user.home") + "/.webdeploy/servers/" + server).exists()) {
-                Log.error("Server " + server + " does not exist");
-                System.exit(1);
-            }
-
-            Log.info("Please enter a project name:");
-            String project = scanner.nextLine();
-
-            Log.info("Do you need a backend? (y/n)");
-            String needbackend = scanner.nextLine();
-
-            String backendpath = "";
-
-            String backendBuildCommand = "";
-            String backendArtifactPath = "";
-            String backendDeployPath = "";
-            String backendRunCommand = "";
-            String backendServiceName = "";
-            String backendProxyPath = "";
-            String backendProxyTarget = "";
-
-            if (needbackend.equals("y")) {
-                Log.info("--- Backend Deployment Configuration (Artifact & Systemd) ---");
-
-                Log.info("Enter backend local build command (e.g. 'mvn clean package') [Empty to skip]:");
-                backendBuildCommand = scanner.nextLine();
-
-                Log.info("Enter local path to backend artifact (e.g. 'target/app.jar'):");
-                backendArtifactPath = scanner.nextLine();
-
-                Log.info("Enter remote path to deploy backend (e.g. '/var/www/backend'):");
-                backendDeployPath = scanner.nextLine();
-
-                backendpath = backendDeployPath;
-
-                Log.info("Enter command to run backend (e.g. 'java -jar app.jar'):");
-                backendRunCommand = scanner.nextLine();
-
-                Log.info("Enter systemd service name (default: " + project + "-backend):");
-                backendServiceName = scanner.nextLine();
-                if (backendServiceName.trim().isEmpty()) {
-                    backendServiceName = project + "-backend";
-                }
-            }
-
-            Log.info("Do you want to configure an Nginx Reverse Proxy? (y/n)");
-            String backendFilePath = "";
-            if (scanner.nextLine().equalsIgnoreCase("y")) {
-                Log.info("Enter path to proxy (e.g. '/api' or '/' for root):");
-                backendProxyPath = scanner.nextLine();
-
-                Log.info("Enter target URL (e.g. 'http://localhost:8080'):");
-                backendProxyTarget = scanner.nextLine();
-
-                Log.info("Do you have a backend server file to deploy? (y/n)");
-                if (scanner.nextLine().equalsIgnoreCase("y")) {
-                    Log.info("Enter backend file path (e.g. server.cjs or server.js):");
-                    backendFilePath = scanner.nextLine();
-                }
-            }
-
-            Log.info("Do you want to configure a domain? (y/n)");
-            String enableDomain = scanner.nextLine();
-            String domain = "";
-
-            if (enableDomain.equalsIgnoreCase("y")) {
-                Log.info("Please enter the domain:");
-                domain = scanner.nextLine();
-            }
-
-            Log.info("Enter frontend build command (leave empty to skip):");
-            String buildCommand = scanner.nextLine();
-
-            Log.info("Enter local frontend folder to upload (default: dist):");
-            String uploadPath = scanner.nextLine();
-            if (uploadPath.trim().isEmpty()) {
-                uploadPath = "dist";
-            }
-
-            Log.info("Enter Nginx client_max_body_size (default: 10M, enter '500M' for large uploads):");
-            String clientMaxBodySize = scanner.nextLine();
-            if (clientMaxBodySize.trim().isEmpty()) {
-                clientMaxBodySize = "10M";
-            }
-
-            ProjectConfig projectConfig = new ProjectConfig(server, project, needbackend.equals("y"), backendpath,
-                    enableDomain.equalsIgnoreCase("y"),
-                    domain, buildCommand, uploadPath,
-                    backendBuildCommand, backendArtifactPath, backendDeployPath,
-                    backendRunCommand, backendServiceName, backendProxyPath, backendProxyTarget,
-                    clientMaxBodySize, backendFilePath);
-
-            new ConfigProvider().setupProject(projectConfig);
+        if (!new File(System.getProperty("user.home") + "/.webdeploy/servers/" + server).exists()) {
+            Log.error("Server '" + server + "' does not exist. Run --setup first.");
+            System.exit(1);
         }
-        Log.info("Project setup complete");
 
+        Log.info("Project name:");
+        String project = scanner.nextLine().trim();
+
+        if (project.isEmpty()) {
+            Log.error("Project name cannot be empty.");
+            System.exit(1);
+        }
+
+        Log.info("Frontend build command" + (defaultBuildCommand.isEmpty() ? " [leave empty to skip]" : " [default: " + defaultBuildCommand + "]") + ":");
+        String buildCommandInput = scanner.nextLine().trim();
+        String buildCommand = buildCommandInput.isEmpty() ? defaultBuildCommand : buildCommandInput;
+
+        Log.info("Local folder to upload [default: " + defaultUploadPath + "]:");
+        String uploadPathInput = scanner.nextLine().trim();
+        String uploadPath = uploadPathInput.isEmpty() ? defaultUploadPath : uploadPathInput;
+
+        Log.info("Domain name (leave empty to skip):");
+        String domain = scanner.nextLine().trim();
+        boolean enableDomain = !domain.isEmpty();
+
+        Log.info("Nginx reverse proxy? (y/n) [default: n]:");
+        String proxyAnswer = scanner.nextLine().trim();
+
+        String backendProxyPath = "";
+        String backendProxyTarget = "";
+        String backendFilePath = "";
+
+        if (proxyAnswer.equalsIgnoreCase("y")) {
+            Log.info("Proxy path (e.g. /api or / for root):");
+            backendProxyPath = scanner.nextLine().trim();
+
+            Log.info("Proxy target URL (e.g. http://localhost:8080):");
+            backendProxyTarget = scanner.nextLine().trim();
+
+            Log.info("Backend server file to deploy? (y/n):");
+            if (scanner.nextLine().trim().equalsIgnoreCase("y")) {
+                Log.info("Backend file path (e.g. server.js):");
+                backendFilePath = scanner.nextLine().trim();
+            }
+        }
+
+        Log.info("Java/Spring backend deployment? (y/n) [default: n]:");
+        String backendAnswer = scanner.nextLine().trim();
+        boolean needsbackend = backendAnswer.equalsIgnoreCase("y");
+
+        String backendBuildCommand = "";
+        String backendArtifactPath = "";
+        String backendDeployPath = "";
+        String backendRunCommand = "";
+        String backendServiceName = "";
+        String backendpath = "";
+
+        if (needsbackend) {
+            Log.info("Backend build command (e.g. mvn clean package or ./gradlew build):");
+            backendBuildCommand = scanner.nextLine().trim();
+
+            Log.info("Local path to backend artifact (e.g. target/app.jar):");
+            backendArtifactPath = scanner.nextLine().trim();
+
+            Log.info("Remote deploy path (e.g. /var/www/backend):");
+            backendDeployPath = scanner.nextLine().trim();
+            backendpath = backendDeployPath;
+
+            Log.info("Command to run backend (e.g. java -jar app.jar):");
+            backendRunCommand = scanner.nextLine().trim();
+
+            Log.info("Systemd service name [default: " + project + "-backend]:");
+            backendServiceName = scanner.nextLine().trim();
+            if (backendServiceName.isEmpty()) {
+                backendServiceName = project + "-backend";
+            }
+        }
+
+        Log.info("Nginx client_max_body_size [default: 10M]:");
+        String clientMaxBodySizeInput = scanner.nextLine().trim();
+        String clientMaxBodySize = clientMaxBodySizeInput.isEmpty() ? "10M" : clientMaxBodySizeInput;
+
+        ProjectConfig projectConfig = new ProjectConfig(server, project, needsbackend, backendpath,
+                enableDomain, domain, buildCommand, uploadPath,
+                backendBuildCommand, backendArtifactPath, backendDeployPath,
+                backendRunCommand, backendServiceName, backendProxyPath, backendProxyTarget,
+                clientMaxBodySize, backendFilePath);
+
+        new ConfigProvider().setupProject(projectConfig);
+        Log.success("Project '" + project + "' configured successfully.");
+
+        if (enableDomain) {
+            Log.info("Would you like to run SSL setup now? (y/n):");
+            String sslAnswer = scanner.nextLine().trim();
+            if (sslAnswer.equalsIgnoreCase("y")) {
+                Log.info("Run '--deploy' first to deploy your project, then '--setupdomain' to configure SSL.");
+                Log.info("Or run: webdeploy --setupdomain --server=" + server + " --domain=" + domain);
+            }
+        }
+
+        } // end try-with-resources scanner
     }
-
 }

@@ -1,7 +1,4 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.setup;
 
@@ -21,6 +18,25 @@ public class DeployService {
         ProjectConfig projectConfig = configProvider.getProjectConfig();
         Config config = configProvider.getServerConfig(projectConfig.getServername());
 
+        // Run pre-deploy command locally if configured
+        if (projectConfig.getPreDeployCommand() != null && !projectConfig.getPreDeployCommand().isEmpty()) {
+            Log.info("Running pre-deploy command: " + projectConfig.getPreDeployCommand());
+            try {
+                ProcessBuilder pb = new ProcessBuilder("bash", "-c", projectConfig.getPreDeployCommand());
+                pb.inheritIO();
+                Process p = pb.start();
+                int exitCode = p.waitFor();
+                if (exitCode != 0) {
+                    Log.error("Pre-deploy command failed with exit code: " + exitCode);
+                    System.exit(1);
+                }
+                Log.success("Pre-deploy command completed.");
+            } catch (Exception e) {
+                Log.error("Failed to run pre-deploy command: " + e.getMessage());
+                System.exit(1);
+            }
+        }
+
         if (projectConfig.getBuildCommand() != null && !projectConfig.getBuildCommand().isEmpty()) {
             Log.info("Executing build command: " + projectConfig.getBuildCommand());
             try {
@@ -32,7 +48,7 @@ public class DeployService {
                     Log.error("Build command failed with exit code: " + exitCode);
                     System.exit(1);
                 }
-                Log.info("Build successful.");
+                Log.success("Build successful.");
             } catch (Exception e) {
                 Log.error("Failed to execute build command: " + e.getMessage());
                 System.exit(1);
@@ -44,38 +60,80 @@ public class DeployService {
             uploadDir = "dist";
         }
 
-        Log.info("Start sftp connection for File upload");
-        connect(config, dir + "/" + uploadDir, "/var/www/html/" + projectConfig.getProjectname());
+        Log.info("Starting SFTP connection for file upload");
+        connect(config, dir + "/" + uploadDir, "/var/www/html/" + projectConfig.getProjectname(), projectConfig);
 
-        Log.info("Start SSH connection for command execution");
+        Log.info("Starting SSH connection for command execution");
         try {
             Session session = connectSSH(config);
 
-            // Skip Nginx setup on deploy to prevent overwriting SSL config.
-            // Nginx is set up via --setupproject (initial) or --setupdomain.
-            // if (projectConfig.getDomain() == null || projectConfig.getDomain().isEmpty())
-            // {
-            // projectConfig.setDomain(domain);
-            // }
-            // new de.bachl.services.NginxService().setupSite(session, projectConfig);
-
-            Log.info("Start command execution");
-            sendCommand("", session);
+            // Setup Nginx if not yet configured
+            try {
+                String nginxCheck = "ls /etc/nginx/sites-available/" + projectConfig.getProjectname();
+                de.bachl.commands.CommandUtils.sendCommand(nginxCheck, session, false);
+                Log.info("Nginx config already exists, skipping setup.");
+            } catch (Exception e) {
+                if (projectConfig.getDomain() != null && !projectConfig.getDomain().isEmpty()) {
+                    Log.info("Nginx config not found, setting up now...");
+                    new de.bachl.services.NginxService().setupSite(session, projectConfig);
+                }
+            }
 
             if (projectConfig.isNeedsbackend()) {
                 deployBackend(session, projectConfig, config);
             }
 
-            // Deploy Node.js backend if configured
             if (projectConfig.getBackendFilePath() != null && !projectConfig.getBackendFilePath().isEmpty()) {
                 deployNodeBackend(session, projectConfig, config);
             }
+
+            session.disconnect();
 
         } catch (Exception e) {
             Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
             System.exit(1);
         }
 
+        // Run post-deploy command locally if configured
+        if (projectConfig.getPostDeployCommand() != null && !projectConfig.getPostDeployCommand().isEmpty()) {
+            Log.info("Running post-deploy command: " + projectConfig.getPostDeployCommand());
+            try {
+                ProcessBuilder pb = new ProcessBuilder("bash", "-c", projectConfig.getPostDeployCommand());
+                pb.inheritIO();
+                Process p = pb.start();
+                int exitCode = p.waitFor();
+                if (exitCode != 0) {
+                    Log.error("Post-deploy command failed with exit code: " + exitCode);
+                } else {
+                    Log.success("Post-deploy command completed.");
+                }
+            } catch (Exception e) {
+                Log.error("Failed to run post-deploy command: " + e.getMessage());
+            }
+        }
+
+        // Health check
+        String healthUrl = projectConfig.getHealthCheckUrl();
+        if (healthUrl == null || healthUrl.isEmpty()) {
+            if (projectConfig.getDomain() != null && !projectConfig.getDomain().isEmpty()) {
+                healthUrl = "http://" + projectConfig.getDomain() + "/";
+            }
+        }
+        if (healthUrl != null && !healthUrl.isEmpty()) {
+            final String finalHealthUrl = healthUrl;
+            Log.info("Performing health check on: " + finalHealthUrl);
+            try {
+                Thread.sleep(3000);
+                ProcessBuilder pb = new ProcessBuilder("bash", "-c",
+                        "curl -sSf " + finalHealthUrl + " --max-time 10 && echo 'Health check passed' || echo 'Health check FAILED'");
+                pb.inheritIO();
+                pb.start().waitFor();
+            } catch (Exception e) {
+                Log.warn("Health check error: " + e.getMessage());
+            }
+        }
+
+        Log.success("Deployment complete.");
     }
 
     private void deployBackend(Session session, ProjectConfig projectConfig, Config serverConfig) {
@@ -111,7 +169,8 @@ public class DeployService {
                 try {
                     channelSftp.mkdir(remotePath);
                 } catch (Exception e) {
-                    /* Ignore if exists */ }
+                    /* Ignore if exists */
+                }
 
                 java.io.File localArtifact = new java.io.File(artifactPath);
                 if (localArtifact.isDirectory()) {
@@ -122,7 +181,7 @@ public class DeployService {
                 }
 
                 channelSftp.disconnect();
-                Log.info("Backend upload complete.");
+                Log.success("Backend upload complete.");
             } catch (Exception e) {
                 Log.error("Backend upload failed: " + e.getMessage());
                 System.exit(1);
@@ -151,15 +210,17 @@ public class DeployService {
             String remoteServiceFile = "/etc/systemd/system/" + serviceName + ".service";
 
             try {
-
-                String writeCmd = "echo '" + serviceContent + "' | sudo tee " + remoteServiceFile;
+                // Use base64 to safely write the service file
+                String b64 = java.util.Base64.getEncoder()
+                        .encodeToString(serviceContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                String writeCmd = "echo '" + b64 + "' | base64 -d | sudo tee " + remoteServiceFile + " > /dev/null";
                 sendCommand(writeCmd, session);
 
                 sendCommand("sudo systemctl daemon-reload", session);
                 sendCommand("sudo systemctl enable " + serviceName, session);
                 sendCommand("sudo systemctl restart " + serviceName, session);
 
-                Log.info("Backend service restarted.");
+                Log.success("Backend service restarted.");
             } catch (Exception e) {
                 Log.error("Failed to configure backend service: " + e.getMessage());
             }
@@ -181,7 +242,6 @@ public class DeployService {
         String backendFileName = backendFile.getName();
 
         try {
-            // 1. Check and install Node.js if needed
             Log.info("Checking for Node.js installation...");
             try {
                 sendCommand("which node", session);
@@ -193,29 +253,22 @@ public class DeployService {
                 Log.info("Node.js installation complete.");
             }
 
-            // 2. Upload backend file
             Log.info("Uploading backend file: " + backendFileName);
             com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
             channelSftp.connect();
-
             channelSftp.put(new java.io.FileInputStream(backendFile), projectRoot + "/" + backendFileName);
 
-            // 3. Check and upload package.json if exists
             java.io.File packageJson = new java.io.File(backendFile.getParent(), "package.json");
             if (packageJson.exists()) {
                 Log.info("Uploading package.json...");
                 channelSftp.put(new java.io.FileInputStream(packageJson), projectRoot + "/package.json");
-
                 channelSftp.disconnect();
-
-                // 4. Install npm dependencies
                 Log.info("Installing npm dependencies...");
                 sendCommand("cd " + projectRoot + " && npm install --production", session);
             } else {
                 channelSftp.disconnect();
             }
 
-            // 5. Kill existing process and start new one
             Log.info("Starting backend service...");
             String killCmd = "pkill -f 'node.*" + backendFileName + "' || true";
             sendCommand(killCmd, session);
@@ -224,9 +277,8 @@ public class DeployService {
                     " > /var/log/" + projectConfig.getProjectname() + "-api.log 2>&1 &";
             sendCommand(startCmd, session);
 
-            // 6. Verify it started
             Thread.sleep(2000);
-            Log.info("Backend service started successfully.");
+            Log.success("Backend service started successfully.");
 
         } catch (Exception e) {
             Log.error("Failed to deploy Node.js backend: " + e.getMessage());
@@ -236,7 +288,8 @@ public class DeployService {
     public com.jcraft.jsch.Session connectSSH(Config config) throws com.jcraft.jsch.JSchException {
         com.jcraft.jsch.JSch jsch = new com.jcraft.jsch.JSch();
         jsch.addIdentity(config.getKeypath());
-        com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), 22);
+        int port = config.getSshPort();
+        com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), port);
         session.setConfig("StrictHostKeyChecking", "no");
         session.connect();
         return session;
@@ -268,9 +321,8 @@ public class DeployService {
         channel.disconnect();
     }
 
-    void connect(Config config, String localPath, String remotePath) {
-        Log.info("Connecting to " + config.getHost() + " to upload all project files from " + localPath + " to "
-                + remotePath);
+    void connect(Config config, String localPath, String remotePath, ProjectConfig projectConfig) {
+        Log.info("Connecting to " + config.getHost() + " to upload files from " + localPath + " to " + remotePath);
         try {
             com.jcraft.jsch.JSch jsch = new com.jcraft.jsch.JSch();
 
@@ -278,7 +330,8 @@ public class DeployService {
                 jsch.addIdentity(config.getKeypath());
             }
 
-            com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), 22);
+            int port = config.getSshPort();
+            com.jcraft.jsch.Session session = jsch.getSession(config.getUser(), config.getHost(), port);
             session.setConfig("StrictHostKeyChecking", "no");
 
             if (config.getPassword() != null && !config.getPassword().isEmpty()) {
@@ -286,7 +339,7 @@ public class DeployService {
             }
 
             session.connect();
-            Log.info("Successfully connected to " + config.getHost());
+            Log.info("Connected to " + config.getHost());
 
             String projectName = new java.io.File(remotePath).getName();
             String storageBase = "/var/www/webdeploy/" + projectName;
@@ -300,33 +353,29 @@ public class DeployService {
             com.jcraft.jsch.ChannelSftp channelSftp = (com.jcraft.jsch.ChannelSftp) session.openChannel("sftp");
             channelSftp.connect();
 
-            Log.info("Starting upload to release: " + releaseName);
+            Log.info("Uploading to release: " + releaseName);
             recursiveUpload(channelSftp, new java.io.File(localPath), releasePath);
-            Log.info("Upload completed.");
+            Log.success("Upload completed.");
 
             channelSftp.disconnect();
 
-            Log.info("Updating internal current link...");
-
+            Log.info("Updating current symlink...");
             sendCommand("ln -sfn " + releasePath + " " + currentLink, session);
 
             Log.info("Updating public access link...");
-
             String checkCmd = "if [ -d \"" + publicLink + "\" ] && [ ! -L \"" + publicLink + "\" ]; then mv \""
                     + publicLink + "\" \"" + publicLink + "_backup_" + releaseName + "\"; fi";
             sendCommand(checkCmd, session);
-
             sendCommand("ln -sfn " + currentLink + " " + publicLink, session);
 
-            Log.info("Start SSH connection for command execution");
-
-            Log.info("Cleaning up old releases...");
-            String listCmd = "ls -1t " + storageBase + "/releases/";
-
-            String cleanupCmd = "cd " + storageBase + "/releases && ls -1t | tail -n +3 | xargs -I {} rm -rf {}";
-
+            // Cleanup old releases using keepReleases from config
+            int keepReleases = (projectConfig != null) ? projectConfig.getKeepReleases() : 5;
+            Log.info("Cleaning up old releases (keeping last " + keepReleases + ")...");
+            String cleanupCmd = "cd " + storageBase + "/releases && ls -1t | tail -n +" + (keepReleases + 1) + " | xargs -I {} rm -rf {}";
             sendCommand(cleanupCmd, session);
-            Log.info("Cleanup completed.");
+            Log.success("Cleanup completed.");
+
+            session.disconnect();
 
         } catch (Exception e) {
             Log.error("Failed to deploy to " + config.getHost() + ". Error: " + e.getMessage());
@@ -337,11 +386,9 @@ public class DeployService {
     void recursiveUpload(com.jcraft.jsch.ChannelSftp sftp, java.io.File localFile, String remotePath)
             throws com.jcraft.jsch.SftpException {
         if (localFile.isDirectory()) {
-
             try {
                 sftp.cd(remotePath);
             } catch (com.jcraft.jsch.SftpException e) {
-
                 try {
                     sftp.mkdir(remotePath);
                     sftp.cd(remotePath);
@@ -361,7 +408,6 @@ public class DeployService {
                     recursiveUpload(sftp, file, remotePath + "/" + file.getName());
                 }
             }
-
         } else {
             try {
                 sftp.put(new java.io.FileInputStream(localFile), remotePath);
@@ -371,5 +417,4 @@ public class DeployService {
             }
         }
     }
-
 }

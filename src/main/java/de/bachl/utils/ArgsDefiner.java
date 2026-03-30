@@ -1,11 +1,7 @@
-/*
- * Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting.
- * All rights reserved.
- */
+/* Copyright (c) 2026 Dominic Bachl IT Solutions & Consulting. All rights reserved. */
 
 package de.bachl.utils;
 
-import java.io.File;
 import java.util.HashMap;
 
 import de.bachl.setup.DeployService;
@@ -42,6 +38,8 @@ public class ArgsDefiner {
             System.exit(0);
         }
 
+        // Config commands that do not require SSH are also routed through CommandService
+        // but handled before SSH connection is established
         new de.bachl.services.CommandService(args).handle();
     }
 }
