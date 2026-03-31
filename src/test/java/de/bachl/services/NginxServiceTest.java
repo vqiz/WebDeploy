@@ -11,6 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
 
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -18,186 +20,144 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-/**
- * NginxService does not expose the config string directly, so we capture the
- * commands sent through the mocked SSH channel to verify correctness.
- *
- * All SSH calls are fully mocked — no network connection is made.
- */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class NginxServiceTest {
 
-    @Mock
-    Session session;
-
-    @Mock
-    ChannelExec channel;
+    @Mock Session session;
+    @Mock ChannelExec channel;
 
     @BeforeEach
-    void setUpChannel() throws Exception {
+    void setUp() throws Exception {
         when(session.openChannel("exec")).thenReturn(channel);
-        when(channel.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[0]));
-        when(channel.isClosed()).thenReturn(false, true);
+        when(channel.getInputStream()).thenAnswer(inv -> new ByteArrayInputStream(new byte[0]));
+        when(channel.isClosed()).thenAnswer(new org.mockito.stubbing.Answer<Boolean>() {
+            int count = 0;
+            public Boolean answer(org.mockito.invocation.InvocationOnMock inv) {
+                return (count++ % 2 != 0);
+            }
+        });
         when(channel.getExitStatus()).thenReturn(0);
     }
 
-    private ProjectConfig basicConfig(String project, String domain) {
-        ProjectConfig config = new ProjectConfig();
-        config.setProjectname(project);
-        config.setDomain(domain);
-        return config;
+    private ProjectConfig basic(String project, String domain) {
+        ProjectConfig c = new ProjectConfig();
+        c.setProjectname(project);
+        c.setDomain(domain);
+        return c;
     }
 
     // -----------------------------------------------------------------------
-    // install
+    // buildNginxConfig — pure logic, no SSH
+    // -----------------------------------------------------------------------
+
+    @Test
+    void buildNginxConfig_includesCorrectDomain() {
+        ProjectConfig config = basic("myapp", "my-domain.com");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("my-domain.com"), "Config should contain the domain");
+    }
+
+    @Test
+    void buildNginxConfig_includesProjectName() {
+        ProjectConfig config = basic("cool-project", "example.com");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("cool-project"), "Config should contain project name");
+    }
+
+    @Test
+    void buildNginxConfig_hasStaticLocationBlock_whenNoRootProxy() {
+        ProjectConfig config = basic("myapp", "example.com");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("try_files"), "Config should have try_files when no root proxy");
+    }
+
+    @Test
+    void buildNginxConfig_noStaticLocation_whenRootProxied() {
+        ProjectConfig config = basic("spa", "spa.example.com");
+        config.setBackendProxyPath("/");
+        config.setBackendProxyTarget("http://localhost:3000");
+        String result = new NginxService().buildNginxConfig(config);
+        assertFalse(result.contains("try_files $uri $uri/ /index.html"),
+                "Static block should be omitted when root is proxied");
+    }
+
+    @Test
+    void buildNginxConfig_includesProxyPass_whenBackendConfigured() {
+        ProjectConfig config = basic("api-app", "api.example.com");
+        config.setBackendProxyPath("/api");
+        config.setBackendProxyTarget("http://localhost:8080");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("proxy_pass"), "Config should include proxy_pass");
+        assertTrue(result.contains("http://localhost:8080"), "Config should include backend target");
+    }
+
+    @Test
+    void buildNginxConfig_usesDefaultClientMaxBodySize() {
+        ProjectConfig config = basic("nosize", "nosize.example.com");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("client_max_body_size 10M"), "Default size should be 10M");
+    }
+
+    @Test
+    void buildNginxConfig_usesCustomClientMaxBodySize() {
+        ProjectConfig config = basic("bigapp", "bigapp.com");
+        config.setClientMaxBodySize("500M");
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("client_max_body_size 500M"), "Custom size should be used");
+    }
+
+    @Test
+    void buildNginxConfig_fallsBackToUnderscore_whenDomainNull() {
+        ProjectConfig config = basic("nodomain", null);
+        String result = new NginxService().buildNginxConfig(config);
+        assertTrue(result.contains("server_name _"), "Should fall back to _ when domain is null");
+    }
+
+    // -----------------------------------------------------------------------
+    // install — SSH interaction
     // -----------------------------------------------------------------------
 
     @Test
     void install_sendsAptGetInstallNginx() throws Exception {
-        // Each sendCommand call opens a channel, so reset the stubbing to return
-        // fresh streams for unlimited calls.
-        when(session.openChannel("exec")).thenReturn(channel);
-        when(channel.getInputStream())
-                .thenReturn(new ByteArrayInputStream(new byte[0]),
-                        new ByteArrayInputStream(new byte[0]),
-                        new ByteArrayInputStream(new byte[0]),
-                        new ByteArrayInputStream(new byte[0]));
-        when(channel.isClosed())
-                .thenReturn(false, true, false, true, false, true, false, true);
-        when(channel.getExitStatus()).thenReturn(0);
-
         new NginxService().install(session);
 
-        ArgumentCaptor<String> cmdCaptor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(cmdCaptor.capture());
-        List<String> commands = cmdCaptor.getAllValues();
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(channel, atLeastOnce()).setCommand(captor.capture());
+        List<String> cmds = captor.getAllValues();
 
-        assertTrue(commands.stream().anyMatch(c -> c.contains("apt-get install") && c.contains("nginx")),
+        assertTrue(cmds.stream().anyMatch(c -> c.contains("apt-get install") && c.contains("nginx")),
                 "install() should run apt-get install nginx");
-        assertTrue(commands.stream().anyMatch(c -> c.contains("systemctl start nginx")),
+        assertTrue(cmds.stream().anyMatch(c -> c.contains("systemctl start nginx")),
                 "install() should start nginx");
     }
 
     // -----------------------------------------------------------------------
-    // setupSite
+    // setupSite — verifies base64 write is sent
     // -----------------------------------------------------------------------
 
     @Test
-    void setupSite_includesStaticLocationBlock_whenNoRootProxy() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("myapp", "example.com");
+    void setupSite_sendsBase64WriteCommand() throws Exception {
+        ProjectConfig config = basic("myapp", "example.com");
         new NginxService().setupSite(session, config);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(channel, atLeastOnce()).setCommand(captor.capture());
 
-        // The echo command for the nginx config should contain try_files
-        boolean hasStaticLocation = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("try_files"));
-        assertTrue(hasStaticLocation, "Config should include static location / block when no root proxy");
+        assertTrue(captor.getAllValues().stream().anyMatch(c -> c.contains("base64 -d") && c.contains("tee")),
+                "setupSite() should write config via base64 decode + tee");
     }
 
     @Test
-    void setupSite_includesCorrectDomain() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("myapp", "my-domain.com");
+    void setupSite_enablesSite() throws Exception {
+        ProjectConfig config = basic("testsite", "test.com");
         new NginxService().setupSite(session, config);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(channel, atLeastOnce()).setCommand(captor.capture());
 
-        boolean hasDomain = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("my-domain.com"));
-        assertTrue(hasDomain, "Nginx config should contain the project domain");
-    }
-
-    @Test
-    void setupSite_includesProjectName() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("cool-project", "example.com");
-        new NginxService().setupSite(session, config);
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(captor.capture());
-
-        boolean hasProjectName = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("cool-project"));
-        assertTrue(hasProjectName, "Nginx config should reference the project name");
-    }
-
-    @Test
-    void setupSite_withBackendProxyPath_includesProxyPassBlock() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("api-app", "api.example.com");
-        config.setBackendProxyPath("/api");
-        config.setBackendProxyTarget("http://localhost:8080");
-
-        new NginxService().setupSite(session, config);
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(captor.capture());
-
-        boolean hasProxy = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("proxy_pass") && c.contains("http://localhost:8080"));
-        assertTrue(hasProxy, "Config should include proxy_pass for backend proxy target");
-    }
-
-    @Test
-    void setupSite_withRootProxy_excludesStaticLocationBlock() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("spa", "spa.example.com");
-        config.setBackendProxyPath("/");
-        config.setBackendProxyTarget("http://localhost:3000");
-
-        new NginxService().setupSite(session, config);
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(captor.capture());
-
-        // When root is proxied there should be no try_files (static location block)
-        boolean hasStaticLocation = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("try_files $uri $uri/ /index.html"));
-        assertFalse(hasStaticLocation,
-                "Static location block should be omitted when root path is proxied");
-    }
-
-    @Test
-    void setupSite_usesDefaultClientMaxBodySize_whenNotSet() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("nosize", "nosize.example.com");
-        // clientMaxBodySize is not set
-
-        new NginxService().setupSite(session, config);
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(captor.capture());
-
-        boolean hasDefault = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("client_max_body_size 10M"));
-        assertTrue(hasDefault, "Default client_max_body_size should be 10M");
-    }
-
-    @Test
-    void setupSite_usesCustomClientMaxBodySize_whenSet() throws Exception {
-        stubUnlimitedChannelCalls();
-
-        ProjectConfig config = basicConfig("bigapp", "bigapp.com");
-        config.setClientMaxBodySize("500M");
-
-        new NginxService().setupSite(session, config);
-
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(channel, atLeastOnce()).setCommand(captor.capture());
-
-        boolean has500M = captor.getAllValues().stream()
-                .anyMatch(c -> c.contains("client_max_body_size 500M"));
-        assertTrue(has500M, "Custom client_max_body_size should be used");
+        assertTrue(captor.getAllValues().stream().anyMatch(c -> c.contains("sites-enabled") && c.contains("testsite")),
+                "setupSite() should create symlink in sites-enabled");
     }
 
     // -----------------------------------------------------------------------
@@ -210,26 +170,6 @@ class NginxServiceTest {
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(channel).setCommand(captor.capture());
-        assertTrue(captor.getValue().contains("systemctl reload nginx"),
-                "reload() should run systemctl reload nginx");
-    }
-
-    // -----------------------------------------------------------------------
-    // Helper
-    // -----------------------------------------------------------------------
-
-    /**
-     * Stubs the channel mock to handle an arbitrary number of sendCommand calls.
-     */
-    private void stubUnlimitedChannelCalls() throws Exception {
-        when(channel.getInputStream()).thenAnswer(inv -> new ByteArrayInputStream(new byte[0]));
-        // Alternate: not-closed, closed for each invocation
-        when(channel.isClosed()).thenAnswer(new org.mockito.stubbing.Answer<Boolean>() {
-            int count = 0;
-            public Boolean answer(org.mockito.invocation.InvocationOnMock inv) {
-                return (count++ % 2 != 0);
-            }
-        });
-        when(channel.getExitStatus()).thenReturn(0);
+        assertTrue(captor.getValue().contains("systemctl reload nginx"));
     }
 }

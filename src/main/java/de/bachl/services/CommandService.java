@@ -37,9 +37,12 @@ public class CommandService {
         new SystemHandler().register(registry);
         new SecurityHandler().register(registry);
         new WebHandler().register(registry);
-
         new FileHandler().register(registry);
         new ProjectHandler().register(registry);
+        new MonitoringHandler().register(registry);
+        new Pm2Handler().register(registry);
+        new DatabaseHandler().register(registry);
+        new ConfigHandler().register(registry);
         new de.bachl.commands.handlers.DomainHandler().register(registry);
         new de.bachl.commands.handlers.SFTPHandler().register(registry);
     }
@@ -84,15 +87,11 @@ public class CommandService {
         try {
             
             if (args.containsKey("--version")) {
-                System.out.println("WebDeploy v1.2.0");
+                System.out.println("WebDeploy v2.0.0");
                 return;
             }
             if (args.containsKey("--help")) {
                 registry.printHelp();
-                return;
-            }
-            if (args.containsKey("--version")) {
-                System.out.println("WebDeploy v1.2.0 - Mega Upgrade");
                 return;
             }
             
@@ -109,8 +108,14 @@ public class CommandService {
             if (found != null) {
                 Session session = null;
                 
-                if (!foundKey.equals("--self-test") && !foundKey.equals("--setupdomain")
-                        && !foundKey.equals("--sftp")) {
+                boolean noSessionRequired = foundKey.equals("--self-test")
+                        || foundKey.equals("--setupdomain")
+                        || foundKey.equals("--sftp")
+                        || foundKey.equals("--show-config")
+                        || foundKey.equals("--show-server")
+                        || foundKey.equals("--remove-server")
+                        || foundKey.equals("--edit-server");
+                if (!noSessionRequired) {
                     session = getSession();
                 }
 

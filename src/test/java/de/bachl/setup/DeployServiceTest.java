@@ -105,8 +105,8 @@ class DeployServiceTest {
         Files.writeString(subDir.resolve("a.js"), "var a=1;");
         Files.writeString(subDir.resolve("b.css"), "body{}");
 
-        // cd will throw (directory doesn't exist remotely), so stub mkdir+cd
-        doThrow(new SftpException(2, "no such file")).when(sftpChannel).cd("/remote/assets");
+        // cd throws first (dir missing), then succeeds after mkdir
+        doThrow(new SftpException(2, "no such file")).doNothing().when(sftpChannel).cd("/remote/assets");
 
         DeployService service = new DeployService();
         service.recursiveUpload(sftpChannel, subDir.toFile(), "/remote/assets");

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(FILE=\"/Users/bachl/Documents/Projekte/WebDeploy/src/test/java/de/bachl/commands/CommandUtilsTest.java\")",
+      "Bash(if ! grep -q \"MockitoSettings\" \"$FILE\")",
+      "Bash(then)",
+      "Bash(sed -i '' 's|import org.mockito.junit.jupiter.MockitoExtension;|import org.mockito.junit.jupiter.MockitoExtension;\\\\nimport org.mockito.junit.jupiter.MockitoSettings;\\\\nimport org.mockito.quality.Strictness;|' \"$FILE\")",
+      "Bash(sed -i '' 's|@ExtendWith\\(MockitoExtension.class\\)|@ExtendWith\\(MockitoExtension.class\\)\\\\n@MockitoSettings\\(strictness = Strictness.LENIENT\\)|' \"$FILE\")",
+      "Bash(grep -oE \"\"[0-9]+\"\" /Users/bachl/Documents/Projekte/WebDeploy/build/reports/tests/test/index.html)",
+      "Bash(cat /Users/bachl/Documents/Projekte/WebDeploy/build/test-results/test/*.xml)",
+      "Read(//Users/bachl/Documents/Projekte/WebDeploy/**)"
+    ]
+  }
+}

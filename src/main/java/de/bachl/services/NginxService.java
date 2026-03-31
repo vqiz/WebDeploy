@@ -3,8 +3,8 @@
 package de.bachl.services;
 
 import com.jcraft.jsch.Session;
-import de.bachl.utils.Log;
 import de.bachl.Config.ProjectConfig;
+import de.bachl.utils.Log;
 
 public class NginxService {
 
@@ -19,73 +19,73 @@ public class NginxService {
 
     public void setupSite(Session session, ProjectConfig config) throws Exception {
         String projectName = config.getProjectname();
-        String domain = config.getDomain();
-
         Log.info("Setting up Nginx for project: " + projectName);
 
-        String configContent = "server {\n" +
-                "    listen 80;\n" +
-                "    server_name " + (domain != null && !domain.isEmpty() ? domain : "_") + ";\n" +
-                "\n" +
-                "    root /var/www/html/" + projectName + ";\n" +
-                "    index index.html index.htm;\n" +
-                "\n" +
-                "    client_max_body_size "
-                + (config.getClientMaxBodySize() != null ? config.getClientMaxBodySize() : "10M") + ";\n" +
-                "\n" +
-                "    if (-f $document_root/maintenance.html) {\n" +
-                "        return 503;\n" +
-                "    }\n" +
-                "    error_page 503 @maintenance;\n" +
-                "    location @maintenance {\n" +
-                "        rewrite ^(.*)$ /maintenance.html break;\n" +
-                "    }\n";
-
-        boolean rootProxied = false;
-        if (config.getBackendProxyPath() != null && config.getBackendProxyPath().equals("/")) {
-            rootProxied = true;
-        }
-
-        if (!rootProxied) {
-            configContent += "\n" +
-                    "    location / {\n" +
-                    "        try_files $uri $uri/ /index.html;\n" +
-                    "    }\n";
-        }
-
-        if (config.getBackendProxyPath() != null && !config.getBackendProxyPath().isEmpty() &&
-                config.getBackendProxyTarget() != null && !config.getBackendProxyTarget().isEmpty()) {
-
-            configContent += "\n" +
-                    "    location " + config.getBackendProxyPath() + " {\n" +
-                    "        proxy_pass " + config.getBackendProxyTarget() + ";\n" +
-                    "        proxy_set_header Host $host;\n" +
-                    "        proxy_set_header X-Real-IP $remote_addr;\n" +
-                    "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n" +
-                    "        proxy_set_header X-Forwarded-Proto $scheme;\n" +
-                    "    }\n";
-        }
-
-        if (config.getNginxCustomBlock() != null && !config.getNginxCustomBlock().isEmpty()) {
-            configContent += "\n    " + config.getNginxCustomBlock() + "\n";
-        }
-
-        configContent += "}";
-
+        String configContent = buildNginxConfig(config);
         String remoteConfigPath = "/etc/nginx/sites-available/" + projectName;
 
-        // Use base64 encoding to safely write the config (avoids single-quote issues)
+        // Use base64 to safely write the config (avoids single-quote injection issues)
         String b64 = java.util.Base64.getEncoder()
                 .encodeToString(configContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String writeCmd = "echo '" + b64 + "' | base64 -d | sudo tee " + remoteConfigPath + " > /dev/null";
-        sendCommand(writeCmd, session);
+        sendCommand("echo '" + b64 + "' | base64 -d | sudo tee " + remoteConfigPath + " > /dev/null", session);
 
-        String linkCommand = "sudo ln -s " + remoteConfigPath + " /etc/nginx/sites-enabled/";
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/" + projectName, session);
-        sendCommand(linkCommand, session);
+        sendCommand("sudo ln -s " + remoteConfigPath + " /etc/nginx/sites-enabled/", session);
         sendCommand("sudo rm -f /etc/nginx/sites-enabled/default", session);
 
         reload(session);
+    }
+
+    /** Package-private — returns the raw nginx config string without SSH, enabling unit testing. */
+    String buildNginxConfig(ProjectConfig config) {
+        String projectName = config.getProjectname();
+        String domain = config.getDomain();
+
+        String content = "server {\n"
+                + "    listen 80;\n"
+                + "    server_name " + (domain != null && !domain.isEmpty() ? domain : "_") + ";\n"
+                + "\n"
+                + "    root /var/www/html/" + projectName + ";\n"
+                + "    index index.html index.htm;\n"
+                + "\n"
+                + "    client_max_body_size "
+                + (config.getClientMaxBodySize() != null ? config.getClientMaxBodySize() : "10M") + ";\n"
+                + "\n"
+                + "    if (-f $document_root/maintenance.html) {\n"
+                + "        return 503;\n"
+                + "    }\n"
+                + "    error_page 503 @maintenance;\n"
+                + "    location @maintenance {\n"
+                + "        rewrite ^(.*)$ /maintenance.html break;\n"
+                + "    }\n";
+
+        boolean rootProxied = "/".equals(config.getBackendProxyPath());
+
+        if (!rootProxied) {
+            content += "\n"
+                    + "    location / {\n"
+                    + "        try_files $uri $uri/ /index.html;\n"
+                    + "    }\n";
+        }
+
+        if (config.getBackendProxyPath() != null && !config.getBackendProxyPath().isEmpty()
+                && config.getBackendProxyTarget() != null && !config.getBackendProxyTarget().isEmpty()) {
+            content += "\n"
+                    + "    location " + config.getBackendProxyPath() + " {\n"
+                    + "        proxy_pass " + config.getBackendProxyTarget() + ";\n"
+                    + "        proxy_set_header Host $host;\n"
+                    + "        proxy_set_header X-Real-IP $remote_addr;\n"
+                    + "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+                    + "        proxy_set_header X-Forwarded-Proto $scheme;\n"
+                    + "    }\n";
+        }
+
+        if (config.getNginxCustomBlock() != null && !config.getNginxCustomBlock().isEmpty()) {
+            content += "\n    " + config.getNginxCustomBlock() + "\n";
+        }
+
+        content += "}";
+        return content;
     }
 
     public void reload(Session session) throws Exception {
@@ -109,8 +109,7 @@ public class NginxService {
                     continue;
                 int exitStatus = channel.getExitStatus();
                 if (exitStatus != 0) {
-                    throw new Exception(
-                            "Command execution failed with exit code: " + exitStatus + " for command: " + command);
+                    throw new Exception("Command failed (exit " + exitStatus + "): " + command);
                 }
                 break;
             }
