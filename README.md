@@ -236,7 +236,7 @@ webdeploy --setupdomain --domain=example.com --project=myapp --server=prod
 | `--os-info` | OS and kernel details |
 | `--kernel` | Kernel version |
 | `--whoami` | Current remote user |
-| `--diskspace` | Disk usage |
+| `--diskspace` | Show available server disk space |
 | `--disk-cleanup` | Clean apt cache + journals |
 | `--service-start <name>` | Start service |
 | `--service-stop <name>` | Stop service |

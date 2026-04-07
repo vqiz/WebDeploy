@@ -313,5 +313,50 @@ public class SystemHandler {
                 CommandUtils.sendCommand("printenv | sort", session, true);
             }
         });
+
+        registry.register(new Command() {
+            public String getCommand() { return "--backupserver"; }
+            public String getDescription() { return "Download a full server backup to a local path (usage: --backupserver <local-destination-path>)."; }
+            public void execute(Session session, HashMap<String, String> args, ProjectConfig config) throws Exception {
+                String localDest = args.get("--backupserver");
+                if (localDest == null || localDest.equals("true") || localDest.isEmpty()) {
+                    Log.error("Please specify a local destination path (e.g. --backupserver /backups/myserver).");
+                    return;
+                }
+
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                String localFile = localDest.endsWith(".tar.gz") ? localDest : localDest + "/server_backup_" + timestamp + ".tar.gz";
+
+                // Ensure local destination directory exists
+                java.io.File localDir = new java.io.File(localDest.endsWith(".tar.gz")
+                        ? new java.io.File(localDest).getParent()
+                        : localDest);
+                if (!localDir.exists() && !localDir.mkdirs()) {
+                    Log.error("Could not create local destination directory: " + localDir.getAbsolutePath());
+                    return;
+                }
+
+                Log.info("Streaming full server backup to " + localFile + " (no remote disk space used)...");
+                com.jcraft.jsch.ChannelExec channel = (com.jcraft.jsch.ChannelExec) session.openChannel("exec");
+                channel.setCommand("sudo tar -czf - --ignore-failed-read /etc /var/www /home /root 2>/dev/null");
+                channel.connect();
+
+                try (java.io.InputStream in = channel.getInputStream();
+                     java.io.FileOutputStream out = new java.io.FileOutputStream(localFile)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    long total = 0;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                        total += n;
+                        if (total % (1024 * 1024 * 10) < 8192) {
+                            Log.info("  " + (total / 1024 / 1024) + " MB received...");
+                        }
+                    }
+                }
+                channel.disconnect();
+                Log.success("Server backup saved to: " + localFile);
+            }
+        });
     }
 }
