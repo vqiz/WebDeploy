@@ -338,7 +338,7 @@ public class SystemHandler {
 
                 Log.info("Streaming full server backup to " + localFile + " (no remote disk space used)...");
                 com.jcraft.jsch.ChannelExec channel = (com.jcraft.jsch.ChannelExec) session.openChannel("exec");
-                channel.setCommand("sudo tar -czf - --ignore-failed-read /etc /var/www /home /root 2>/dev/null");
+                channel.setCommand("sudo tar -czf - --ignore-failed-read /etc /var /home /root 2>/dev/null");
                 channel.connect();
 
                 try (java.io.InputStream in = channel.getInputStream();
